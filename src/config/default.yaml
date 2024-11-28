@@ -1,0 +1,38 @@
+data:
+  data_path: "dataset/pilot_1115/"
+  fs: 500  # sampling frequency
+  total_duration: 85000  # 170 * fs = 170 * 500
+  sample_len: 5000      # 10 * fs = 10 * 500
+  overlap: 0.75
+  intra_session_split_ratio: 0.8
+
+training:
+  batch_size: 32
+  num_workers: 4
+  learning_rate: 0.001
+  max_epochs: 100
+  weight_decay: 0.0001
+
+scheduler:
+  type: "cosine"
+  T_max: 10
+  init_lr: 0.001
+  min_lr: 0.0001
+  warmup_epochs: 5
+
+network:
+  seq_len: 5000  # same as data.sample_len
+  hidden_channels: [64, 128, 256]
+  kernel_size: 5
+  use_lstm: true
+  lstm_hidden_size: 128
+  lstm_num_layers: 2
+  dropout: 0.1
+
+loss:
+  seq_len: 5000  # same as data.sample_len
+  sigma: 2.0
+  min_peak_distance: 250  # fs * 0.5 = 500 * 0.5
+  max_peak_distance: 650  # fs * 1.3 = 500 * 1.3
+  distance_weight: 0.1
+  count_weight: 0.1
