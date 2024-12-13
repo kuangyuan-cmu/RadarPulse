@@ -3,9 +3,10 @@ from torch.utils.data import DataLoader
 from .dataset import PulseDataset
 
 class PulseDataModule(pl.LightningDataModule):
-    def __init__(self, data_path, batch_size, num_workers):
+    def __init__(self, data_path, pulse_position, batch_size, num_workers):
         super().__init__()
         self.data_path = data_path
+        self.pulse_position = pulse_position
         self.batch_size = batch_size
         self.num_workers = num_workers
         
@@ -13,17 +14,20 @@ class PulseDataModule(pl.LightningDataModule):
         if stage == 'fit' or stage is None:
             print("Setting up training dataset")
             self.train_dataset = PulseDataset(
-                f"{self.data_path}/train"
+                f"{self.data_path}/train",
+                self.pulse_position
             )
             print("Setting up validation dataset")
             self.val_dataset = PulseDataset(
-                f"{self.data_path}/dev"
+                f"{self.data_path}/dev",
+                self.pulse_position
             ) 
             
         if stage == 'test':
             print("Setting up testing dataset")
             self.test_dataset = PulseDataset(
-                f"{self.data_path}/dev"
+                f"{self.data_path}/dev",
+                self.pulse_position
             )
             
     def train_dataloader(self):

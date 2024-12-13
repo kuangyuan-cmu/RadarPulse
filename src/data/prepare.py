@@ -2,10 +2,10 @@ from pathlib import Path
 import scipy.io
 import numpy as np
 import argparse
-
+import tqdm
 
 fs = 500
-total_duration = 170 * fs
+# total_duration = 170 * fs
 sample_len = 10 * fs
 overlap = 0.75
 intra_session_split_ratio = 0.8
@@ -68,7 +68,7 @@ def main(dataset_path):
     dev_path = dataset_path / 'dev'
     dev_path.mkdir(exist_ok=True)
 
-    for exp in exps:
+    for exp in tqdm.tqdm(exps):
         gt_files = list(exp.glob('GT*.mat'))
         head_files = list(exp.glob('head*.mat'))
         heart_files = list(exp.glob('heart*.mat'))
@@ -89,16 +89,16 @@ def main(dataset_path):
                 'wrist': wrist_data,
             }
 
-            offset = total_duration - data_len
+            # offset = total_duration - data_len # ground truth offset for pilot_1115 dataset
 
             head_labels = np.zeros((data_len, 1), dtype=int)
             heart_labels = np.zeros((data_len, 1), dtype=int)
             wrist_labels = np.zeros((data_len, 1), dtype=int)
 
             gt_data = scipy.io.loadmat(gt_file)
-            head_peaks_gt = gt_data['bcg_peaks_gt'].T - offset
-            wrist_peaks_gt = gt_data['ppg_peaks_gt'].T - offset
-            heart_peaks_gt = gt_data['scg_peaks_gt'].T - offset
+            head_peaks_gt = gt_data['bcg_peaks_gt'].T
+            wrist_peaks_gt = gt_data['ppg_peaks_gt'].T
+            heart_peaks_gt = gt_data['scg_peaks_gt'].T
 
             head_labels[head_peaks_gt] = 1
             wrist_labels[wrist_peaks_gt] = 1
@@ -127,3 +127,5 @@ if __name__ == "__main__":
     parser.add_argument('dataset_path', type=str, help='Path to the dataset directory')
     args = parser.parse_args()
     main(args.dataset_path)
+    
+    # main('/home/kyuan/RadarPulse/dataset/phase1_1212')

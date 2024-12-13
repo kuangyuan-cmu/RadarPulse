@@ -5,8 +5,8 @@ from pathlib import Path
 @dataclass
 class DataConfig:
     data_path: str
+    position: str
     fs: int
-    total_duration: int
     sample_len: int
     overlap: float
     intra_session_split_ratio: float

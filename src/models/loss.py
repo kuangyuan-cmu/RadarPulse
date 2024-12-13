@@ -27,8 +27,8 @@ class PulseLoss(nn.Module):
         peak_indices = torch.where(peak_locations > 0)
         if peak_indices[0].shape[0] > 0:
             for b, t in zip(peak_indices[0], peak_indices[1]):
-                gaussian = torch.exp(-0.5 * ((time_idx - t) / self.sigma) ** 2)
-                gaussian_target[b, :, 0] += gaussian
+                gaussian = torch.exp(-0.5 * ((time_idx - t.float()) / self.sigma) ** 2)
+                gaussian_target[b, :, 0] += gaussian.squeeze()
                 
         return torch.clamp(gaussian_target, 0, 1)
 

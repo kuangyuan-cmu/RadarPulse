@@ -135,7 +135,6 @@ if __name__ == '__main__':
     net = PulseDetectionNet(in_channels=40, seq_len=5000)
     # model summary
     print(net)
-    
     x = torch.randn(32, 5000, 40)
     y = net(x)
     print(y.shape)
