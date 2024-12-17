@@ -10,6 +10,8 @@ class DataConfig:
     sample_len: int
     overlap: float
     intra_session_split_ratio: float
+    n_channels: int
+    norm_2d: bool
     
     def validate(self):
         assert 0 < self.overlap < 1
@@ -23,18 +25,19 @@ class TrainingConfig:
     learning_rate: float
     max_epochs: int
     weight_decay: float
+    seed: int
 
 @dataclass
 class SchedulerConfig:
     type: str
     T_max: int
-    init_lr: float
     min_lr: float
     warmup_epochs: int
 
 @dataclass
 class NetworkConfig:
     seq_len: int
+    reduce_channels: int
     hidden_channels: List[int]
     kernel_size: int
     use_lstm: bool

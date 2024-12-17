@@ -39,17 +39,26 @@ class PulseLoss(nn.Module):
         total_distance_loss = torch.tensor(0.0, device=device)
         
         # Soft peak detection
-        # Use local maxima above threshold as peaks
         threshold = 0.5
         kernel_size = 3
-        pad = kernel_size // 2
         
         for b in range(batch_size):
             # Find local maxima
             x = pred[b, :, 0]
-            padded = F.pad(x, (pad, pad), mode='reflect')
-            windows = padded.unfold(0, kernel_size, 1)
-            local_max = (x == windows.max(1)[0]) & (x > threshold)
+            
+            # Add dimensions for max_pool1d
+            x_expanded = x.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, seq_len)
+            
+            # Use max_pool1d to find local maxima
+            # padding='same' maintains input size
+            local_max_vals = F.max_pool1d(x_expanded, kernel_size=kernel_size, 
+                                        stride=1, padding=kernel_size//2)
+            
+            # Squeeze back to original dimensions
+            local_max_vals = local_max_vals.squeeze()
+            
+            # Find peaks
+            local_max = (x == local_max_vals) & (x > threshold)
             
             # Get peak positions
             peak_positions = torch.where(local_max)[0]
@@ -73,6 +82,48 @@ class PulseLoss(nn.Module):
         
         return total_distance_loss / batch_size
 
+    def peak_count_loss(self, pred, target):
+        """Calculate loss based on difference in peak counts"""
+        batch_size = pred.shape[0]
+        device = pred.device
+        
+        # Parameters for peak detection
+        threshold = 0.5
+        kernel_size = 3
+        
+        # Initialize tensor for predicted peak counts
+        pred_peak_counts = torch.zeros(batch_size, device=device)
+        
+        for b in range(batch_size):
+            # Get prediction for this batch
+            x = pred[b, :, 0]
+            
+            # Add dimensions for max_pool1d
+            x_expanded = x.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, seq_len)
+            
+            # Find local maxima using max_pool1d
+            local_max_vals = F.max_pool1d(x_expanded, kernel_size=kernel_size, 
+                                        stride=1, padding=kernel_size//2)
+            
+            # Squeeze back to original dimensions
+            local_max_vals = local_max_vals.squeeze()
+            
+            # A point is a peak if it's both:
+            # 1. A local maximum (equal to the max in its neighborhood)
+            # 2. Above threshold
+            peaks = (x == local_max_vals) & (x > threshold)
+            
+            # Count peaks for this batch
+            pred_peak_counts[b] = peaks.sum()
+        
+        # Calculate target peak counts
+        target_peak_counts = target.sum(dim=1).squeeze(-1)
+        
+        # Calculate absolute difference in counts
+        count_diff = torch.abs(pred_peak_counts - target_peak_counts)
+        
+        return count_diff.mean()
+
     def forward(self, pred, target):
         # Generate Gaussian target
         gaussian_target = self.generate_gaussian_target(target, self.seq_len)
@@ -81,18 +132,15 @@ class PulseLoss(nn.Module):
         bce_loss = F.binary_cross_entropy(pred, gaussian_target)
         
         # Peak count loss
-        pred_peaks = (pred > 0.5).float()
-        count_diff = torch.abs(pred_peaks.sum(dim=1) - target.sum(dim=1))
-        count_loss = self.count_weight * count_diff.mean()
+        # count_loss = self.count_weight * self.peak_count_loss(pred, target)
+        # total_loss = bce_loss + count_loss
         
         # Peak distance loss
         # distance_loss = self.distance_weight * self.peak_distance_loss(pred)
         # total_loss = bce_loss + count_loss + distance_loss
-        
-        total_loss = bce_loss + count_loss
-        
+        total_loss = bce_loss
         return total_loss, {
             'bce_loss': bce_loss.item(),
-            'count_loss': count_loss.item(),
+            # 'count_loss': count_loss.item(),
             # 'distance_loss': distance_loss.item()
         }

@@ -7,7 +7,7 @@ import tqdm
 fs = 500
 # total_duration = 170 * fs
 sample_len = 10 * fs
-overlap = 0.75
+overlap = 0.8
 intra_session_split_ratio = 0.8
     
 def intra_session_split(data: dict, label: dict, ratio: float):

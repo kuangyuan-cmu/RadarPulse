@@ -1,8 +1,95 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchinfo import summary
 from typing import List
 
+class SpatialReductionPreprocessing(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        """
+        Args:
+            in_channels: Number of input spatial points
+            out_channels: Desired number of output spatial points
+        """
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.spatial_temporal_processing = nn.Sequential(
+            # Reshape input to 2D format implicitly in forward pass
+            nn.Conv2d(
+                in_channels=1,  # Single channel input after reshape
+                out_channels=16,  # Intermediate feature maps
+                kernel_size=(5, 7),  # (spatial, temporal) kernel
+                padding=(2, 3),  # Same padding to maintain temporal dimension
+                stride=1
+            ),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            
+            # Second conv for feature processing
+            nn.Conv2d(
+                in_channels=16,
+                out_channels=16,
+                kernel_size=(5, 7),
+                padding=(2, 3),
+                stride=1
+            ),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+        )
+        
+        # self.spatial_temporal_feature = nn.Sequential(
+        #     # Reshape input to 2D format implicitly in forward pass
+        #     nn.Conv2d(
+        #         in_channels=1,  # Single channel input after reshape
+        #         out_channels=16,  # Intermediate feature maps
+        #         kernel_size=(5, 7),  # (spatial, temporal) kernel
+        #         padding=(2, 3),  # Same padding to maintain temporal dimension
+        #         stride=1
+        #     ),
+        #     nn.BatchNorm2d(16),
+        #     nn.ReLU(),
+        # )
+        # self.spatial_temporal_weight = nn.Sequential(
+        #     # Second conv for feature processing
+        #     nn.Conv2d(
+        #         in_channels=16,
+        #         out_channels=16,
+        #         kernel_size=(5, 7),
+        #         padding=(2, 3),
+        #         stride=1
+        #     ),
+        #     nn.BatchNorm2d(16),
+        #     nn.ReLU(),
+        # )
+        
+        # Final 1x1 conv to get exact channel count
+        self.channel_adjust = nn.Conv2d(16, 1, kernel_size=1)
+        
+    def forward(self, x):
+        # x shape: (batch, spatial, temporal)
+        batch, spatial, temporal = x.shape
+        
+        # Add channel dimension for 2D CNN
+        x = x.unsqueeze(1)  # (batch, 1, spatial, temporal)
+        
+        # Apply spatial-temporal processing
+        x = self.spatial_temporal_processing(x)  # (batch, 16, spatial, temporal)
+        x = torch.topk(x, self.out_channels, dim=2)[0]  # (batch, 16, reduce_spatial, temporal)
+        
+        # x = self.spatial_temporal_feature(x)
+        # weights = self.spatial_temporal_weight(x)
+        # idx = torch.topk(weights, self.out_channels, dim=2)[1]  # (batch, 16, reduce_spatial, temporal)
+        # x = torch.gather(x, 2, idx)
+        
+        # Adjust channels
+        x = self.channel_adjust(x)  # (batch, 1, reduced_spatial, temporal)
+        
+        # Remove extra channel dimension and reshape
+        x = x.squeeze(1)  # (batch, reduced_spatial, temporal)
+        
+        return x
+    
 class EncoderBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, kernel_size: int):
         super().__init__()
@@ -43,6 +130,7 @@ class PulseDetectionNet(nn.Module):
     def __init__(self, 
                  in_channels: int,
                  seq_len: int,
+                 reduce_channels: int = 8,
                  hidden_channels: List[int] = [64, 128, 256],
                  kernel_size: int = 5,
                  use_lstm: bool = True,
@@ -54,9 +142,12 @@ class PulseDetectionNet(nn.Module):
         self.seq_len = seq_len
         self.use_lstm = use_lstm
         
+        self.spatial_processing = SpatialReductionPreprocessing(in_channels, reduce_channels)
+        current_channels = reduce_channels
+        # current_channels = in_channels
+        
         # Encoder
         self.encoder_blocks = nn.ModuleList()
-        current_channels = in_channels
         
         for hidden_ch in hidden_channels:
             self.encoder_blocks.append(
@@ -105,6 +196,7 @@ class PulseDetectionNet(nn.Module):
         # Input shape: (N, L, C)
         x = x.transpose(1, 2)  # (N, C, L)
         
+        x = self.spatial_processing(x)
         # Store skip connections
         skip_connections = []
         
@@ -134,7 +226,8 @@ if __name__ == '__main__':
     # Test network
     net = PulseDetectionNet(in_channels=40, seq_len=5000)
     # model summary
-    print(net)
+    # info = summary(net, input_size=(32, 5000, 40))
+    # print(info)
     x = torch.randn(32, 5000, 40)
     y = net(x)
     print(y.shape)

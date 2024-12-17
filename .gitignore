@@ -1,4 +1,6 @@
 dataset/*/**/
 lightning_logs
 logs
+checkpoints
+config
 **/__pycache__/
