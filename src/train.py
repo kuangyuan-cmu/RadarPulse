@@ -17,13 +17,14 @@ def train(config, checkpoint_path=None):
         num_workers=config.training.num_workers,
         norm_2d=config.data.norm_2d,
     )
-
+    # data_module.setup()
+    
     model = LitModel(config)
     if checkpoint_path:
-        model.load_state_dict(torch.load('checkpoints/dataset/phase1_new_1214/heart_try-epoch=45-val_loss=0.13.ckpt')['state_dict'])
+        model.load_state_dict(torch.load(checkpoint_path)['state_dict'])
     
     # Initialize trainer
-    exp_name = f"{config.data.data_path}{config.data.position}_spatial_conv_top4_wd1e-1"
+    exp_name = f"{config.data.data_path}{config.data.position}"
     
     loss_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
@@ -49,7 +50,7 @@ def train(config, checkpoint_path=None):
     #     mode='min',
     #     save_last=False  # Additionally save the last model
     # )
-    
+
     wandb_logger = WandbLogger(
         project="radar-pulse-detection",
         name=exp_name,
@@ -78,9 +79,10 @@ def main():
     if not args.config:
         config = load_config('src/config')
     else:
-        config = load_config(args.config, env=args.config)
+        config = load_config('src/config', env=args.config)
         
     train(config, args.checkpoint)
     
 if __name__ == '__main__':
     main()
+    

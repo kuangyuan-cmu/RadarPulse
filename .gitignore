@@ -3,4 +3,5 @@ lightning_logs
 logs
 checkpoints
 config
+results
 **/__pycache__/

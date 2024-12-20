@@ -31,8 +31,8 @@ class TrainingConfig:
 class SchedulerConfig:
     type: str
     T_max: int
+    T_mult: int
     min_lr: float
-    warmup_epochs: int
 
 @dataclass
 class NetworkConfig:

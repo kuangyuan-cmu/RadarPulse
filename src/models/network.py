@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchinfo import summary
 from typing import List
+import numpy as np
 
 class SpatialReductionPreprocessing(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
@@ -173,8 +174,6 @@ class PulseDetectionNet(nn.Module):
         hidden_channels_reversed.append(32)
         
         for i in range(len(hidden_channels_reversed) - 1):
-            # Calculate correct input channels for each decoder block
-            # in_ch = current_channels + hidden_channels_reversed[i]
             in_ch = current_channels
             out_ch = hidden_channels_reversed[i + 1]
             self.decoder_blocks.append(
@@ -184,7 +183,6 @@ class PulseDetectionNet(nn.Module):
             
         # Final convolution
         self.final = nn.Sequential(
-            # nn.Upsample(scale_factor=2, mode='linear', align_corners=False),  # Add this
             nn.Conv1d(32, 32, kernel_size=3, padding=1),
             nn.BatchNorm1d(32),
             nn.ReLU(),
@@ -192,42 +190,81 @@ class PulseDetectionNet(nn.Module):
             nn.Sigmoid()
         )
 
-    def forward(self, x):
-        # Input shape: (N, L, C)
+    def encode(self, x):
+        # Returns encoder features and skip connections
+        x = x.transpose(1, 2)  # (N, C, L)
+        x = self.spatial_processing(x)
+        
+        skip_connections = []
+        for encoder in self.encoder_blocks:
+            x, features = encoder(x)
+            skip_connections.append(features)
+            
+        return x, skip_connections
+
+    def bottleneck(self, x):
+        # LSTM processing
+        batch_size, channels, seq_len = x.shape
+        x = x.transpose(1, 2)  # (N, L, C)
+        x, _ = self.lstm(x)
+        return x  # Keep in (N, L, C) for attention
+
+    def decode(self, x, skip_connections):
+        # x shape: (N, L, C) from bottleneck
         x = x.transpose(1, 2)  # (N, C, L)
         
-        x = self.spatial_processing(x)
-        # Store skip connections
-        skip_connections = []
-        
-        # Encoder
-        for encoder in self.encoder_blocks:
-            x, features = encoder(x)  # Get both output and features
-            skip_connections.append(features)  # Store features for skip connection
-            
-        # LSTM at bottleneck
-        if self.use_lstm:
-            batch_size, channels, seq_len = x.shape
-            x = x.transpose(1, 2)  # (N, L, C)
-            x, _ = self.lstm(x)
-            x = x.transpose(1, 2)  # (N, C, L)
-            
-        # Decoder
-        skip_connections = skip_connections[::-1]  # Reverse and skip the last encoder output
+        skip_connections = skip_connections[::-1]
         for decoder, skip in zip(self.decoder_blocks, skip_connections):
             x = decoder(x, skip)
             
-        # Final convolution
         x = self.final(x)
-        
         return x.transpose(1, 2)  # (N, L, 1)
+
+    def forward(self, x):
+        x, skip_connections = self.encode(x)
+        x = self.bottleneck(x)
+        x = self.decode(x, skip_connections)
+        return x
+    
+    # def forward(self, x):
+    #     # Input shape: (N, L, C)
+    #     x = x.transpose(1, 2)  # (N, C, L)
+        
+    #     x = self.spatial_processing(x) # (N, reduced_channels, L)
+    #     # Store skip connections
+    #     skip_connections = []
+        
+    #     # Encoder
+    #     for encoder in self.encoder_blocks:
+    #         x, features = encoder(x)  # Get both output and features
+    #         skip_connections.append(features)  # Store features for skip connection
+            
+    #     # LSTM at bottleneck
+    #     if self.use_lstm:
+    #         batch_size, channels, seq_len = x.shape
+    #         x = x.transpose(1, 2)  # (N, L, C)
+    #         x, _ = self.lstm(x)
+    #         x = x.transpose(1, 2)  # (N, C, L)
+            
+    #     # Decoder
+    #     skip_connections = skip_connections[::-1]  # Reverse and skip the last encoder output
+    #     for decoder, skip in zip(self.decoder_blocks, skip_connections):
+    #         x = decoder(x, skip)
+            
+    #     # Final convolution
+    #     x = self.final(x)
+        
+    #     return x.transpose(1, 2)  # (N, L, 1)
 
 if __name__ == '__main__':
     # Test network
+    torch.manual_seed(0)
     net = PulseDetectionNet(in_channels=40, seq_len=5000)
     # model summary
     # info = summary(net, input_size=(32, 5000, 40))
     # print(info)
+    # set random seed
     x = torch.randn(32, 5000, 40)
     y = net(x)
     print(y.shape)
+    print(y[0, :20, 0])

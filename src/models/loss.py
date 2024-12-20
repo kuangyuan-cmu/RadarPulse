@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 class PulseLoss(nn.Module):
     def __init__(self, 
@@ -123,14 +123,24 @@ class PulseLoss(nn.Module):
         count_diff = torch.abs(pred_peak_counts - target_peak_counts)
         
         return count_diff.mean()
-
-    def forward(self, pred, target):
+    
+    def debug(self, preds, targets, names):
+        # plot all of the preds and targets for a single batch
+        for i in range(preds.shape[0]):
+            plt.plot(preds[i, :, 0].detach().cpu().numpy())
+            plt.plot(targets[i, :, 0].detach().cpu().numpy())
+            plt.title(names[i])
+            plt.show()
+            
+    def forward(self, pred, target, name=None):
         # Generate Gaussian target
         gaussian_target = self.generate_gaussian_target(target, self.seq_len)
         
         # BCE loss
         bce_loss = F.binary_cross_entropy(pred, gaussian_target)
         
+        if name is not None:
+            self.debug(pred, gaussian_target, name)
         # Peak count loss
         # count_loss = self.count_weight * self.peak_count_loss(pred, target)
         # total_loss = bce_loss + count_loss

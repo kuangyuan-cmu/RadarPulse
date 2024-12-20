@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 import tqdm
 import numpy as np
 from pathlib import Path
-
+import LnkParse3
 
 class PulseDataset(Dataset):
     def __init__(self, data_path, pulse_position, norm_2d=False):
@@ -14,15 +14,21 @@ class PulseDataset(Dataset):
         self._load_data()
         
     def _load_data(self):
-        file_list = list(self.data_path.glob('*.npz'))
+        file_list = list(self.data_path.glob('*.npz*'))
         if len(file_list) == 0:
             raise FileNotFoundError(f"No files found in {self.data_path}")
         
         self.data = []
         self.label = []
-        
+        self.file_name = []
         for file_item in tqdm.tqdm(file_list):
+            # with open(file_item, 'rb') as indata:
+            #     lnk = LnkParse3.lnk_file(indata)
+            #     file_item = '/' + lnk.get_json()['link_info']['common_path_suffix'].replace("\\", '/')
+                
             loaded_data = np.load(file_item)
+            # file_name = file_item.split('/')[-1].split('.')[0]
+            file_name = file_item.name.split('.')[0]
             
             if self.pulse_position == 'head':
                 data = loaded_data['head_data'].sum(axis=2)
@@ -42,6 +48,7 @@ class PulseDataset(Dataset):
             data = np.unwrap(np.angle(data), axis=1)
             self.data.append(torch.from_numpy(data))
             self.label.append(torch.from_numpy(label))
+            self.file_name.extend([file_name] * data.shape[0])
 
         self.data = torch.cat(self.data, dim=0).float()
         if self.norm_2d:
@@ -56,4 +63,9 @@ class PulseDataset(Dataset):
         return self.data.shape[0]
         
     def __getitem__(self, idx):
-        return self.data[idx], self.label[idx]
+        return self.data[idx], self.label[idx], self.file_name[idx]
+    
+
+    
+if __name__ == '__main__':
+    Dataset = PulseDataset(data_path='/home/kyuan/RadarPulse/dataset/phase1_new_1214_cross_sessions/dev/', pulse_position='wrist')
