@@ -50,7 +50,12 @@ def load_config(config_path: str, env: Optional[str] = None, to_class: bool = Tr
     if not to_class:
         return config
     return DictToClass(config)
-    
+
+def combine_configs(*configs, names=["default", "head", "heart", "wrist"]):
+    """Combine multiple configs into a single config."""
+    combined = {}
+    for name, config in zip(names, configs):
+        combined[name] = config
 
 if __name__ == '__main__':
     config = load_config('default.yaml')

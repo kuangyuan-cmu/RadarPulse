@@ -10,10 +10,9 @@ def test(config, checkpoint_path, exp_name, debug=False):
     # Initialize data module
     data_module = PulseDataModule(
         data_path=config.data.data_path,
-        pulse_position=config.data.position,
+        data_config=config.data,
         batch_size=config.training.batch_size,
         num_workers=config.training.num_workers,
-        norm_2d=config.data.norm_2d,
     )
 
     model = LitModel(config, debug=debug)

@@ -4,7 +4,7 @@ import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from .network import PulseDetectionNet 
 from .loss import PulseLoss
-from .eval_metrics import peak_error
+from .eval_metrics import peak_error, PulseEval
 import matplotlib.pyplot as plt
 
 class LitModel(pl.LightningModule):
@@ -14,10 +14,10 @@ class LitModel(pl.LightningModule):
         self.config = config
         self.debug = debug
         self.model = PulseDetectionNet(
-            in_channels=config.data.n_channels, 
             **self.config.network
         )
         self.criterion = PulseLoss(**self.config.loss)
+        self.evaluation = PulseEval(peak_min_distance=self.config.loss.min_peak_distance)
         self.results = None
 
     def forward(self, x):
@@ -29,7 +29,6 @@ class LitModel(pl.LightningModule):
         y_hat = self(x)
         loss, loss_components = self.criterion(y_hat, y)
         
-        # Log all loss components
         self.log('train_loss', loss, prog_bar=True, on_step=False, on_epoch=True)
         self.log('lr', self.trainer.optimizers[0].param_groups[0]['lr'], prog_bar=True, on_step=False, on_epoch=True)
         for name, value in loss_components.items():
@@ -41,13 +40,11 @@ class LitModel(pl.LightningModule):
         y = batch[1]
         y_hat = self(x)
         loss, loss_components = self.criterion(y_hat, y)
-
-        # Log all loss components
+        
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         for name, value in loss_components.items():
             self.log(f'val_{name}', value)
         
-        # if batch_idx % 5 == 0:
         _, count_error, distance_error, _ = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.5])
         self.log('val_count_error', count_error[0], prog_bar=True)
         self.log('val_distance_error', distance_error[0], prog_bar=True)
@@ -60,9 +57,11 @@ class LitModel(pl.LightningModule):
         y_hat = self(x)
         loss, loss_components = self.criterion(y_hat, y)
         if self.debug:
-            peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.4], debug_fnames=batch[2])
+            # peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.45], debug_fnames=batch[2])
+            self.evaluation.peak_error(y_hat, y, heights=[0.45], debug_fnames=batch[2])
         
         heights, count_errors, distance_errors, all_distance_errors = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance)
+        # heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat, y)
         
         if self.thrs is None:
             self.thrs = heights
@@ -124,7 +123,6 @@ class LitModel(pl.LightningModule):
         self.count_errs_at_thrs = None
     
     def on_test_epoch_end(self):
-        # save the thrs, distance_errs_at_thrs, count_errs_at_thrs to a file
         for i in range(len(self.thrs)):
             self.distance_errs_at_thrs[i] = np.array(self.distance_errs_at_thrs[i])
             self.count_errs_at_thrs[i] = np.array(self.count_errs_at_thrs[i])
@@ -139,13 +137,4 @@ class LitModel(pl.LightningModule):
             'count_errs_at_thrs': count_errs_at_thrs
         }
     
-       
-        
-        #  # Convert lists to numpy arrays
-        # for height in self.all_distance_errors:
-        #     self.all_distance_errors[height] = np.array(self.all_distance_errors[height])
-        
-        # # save all distance errors to a file
-        # np.save('all_distance_errors.npy', self.all_distance_errors)
-        
-        # return self.all_distance_errors
+    

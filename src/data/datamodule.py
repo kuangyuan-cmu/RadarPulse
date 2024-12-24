@@ -3,34 +3,53 @@ from torch.utils.data import DataLoader
 from .dataset import PulseDataset
 
 class PulseDataModule(pl.LightningDataModule):
-    def __init__(self, data_path, pulse_position, batch_size, num_workers, norm_2d):
+    def __init__(self, data_path, data_config, batch_size, num_workers):
         super().__init__()
+        # judge if data_config is a list
         self.data_path = data_path
-        self.pulse_position = pulse_position
+        if isinstance(data_config, list):
+            self.pulse_position = [config.position for config in data_config]
+            self.signal_type = [config.signal_type for config in data_config]
+            self.norm_2d = [config.norm_2d for config in data_config]
+        else:
+            self.pulse_position = data_config.position
+            self.signal_type = data_config.signal_type
+            self.norm_2d = data_config.norm_2d
+            
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.norm_2d = norm_2d
-        
+       
     def setup(self, stage=None):
         if stage == 'fit' or stage is None:
             print("Setting up training dataset")
             self.train_dataset = PulseDataset(
                 f"{self.data_path}/train",
                 self.pulse_position,
+                self.signal_type,
                 self.norm_2d
             )
             print("Setting up validation dataset")
             self.val_dataset = PulseDataset(
                 f"{self.data_path}/dev",
                 self.pulse_position,
+                self.signal_type,
                 self.norm_2d
             ) 
+        if stage == 'validate':
+            print("Setting up validation dataset")
+            self.val_dataset = PulseDataset(
+                f"{self.data_path}/dev",
+                self.pulse_position,
+                self.signal_type,
+                self.norm_2d
+            )
             
         if stage == 'test':
             print("Setting up testing dataset")
             self.test_dataset = PulseDataset(
                 f"{self.data_path}/dev",
                 self.pulse_position,
+                self.signal_type,
                 self.norm_2d
             )
             

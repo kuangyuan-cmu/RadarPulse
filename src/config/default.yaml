@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/phase1_new_1219/"
+  data_path: "dataset/phase1_new_1220/"
   position: "heart"
   fs: 500  # sampling frequency
   sample_len: 5000      # 10 * fs = 10 * 500
@@ -17,13 +17,14 @@ training:
   seed: 42
 
 scheduler:
-  type: "cosine"
+  type: "none"
   T_max: 10
   min_lr: 0.001
   warmup_epochs: 5
 
 network:
   seq_len: 5000  # same as data.sample_len
+  in_channels: 21
   reduce_channels: 8
   hidden_channels: [32, 64, 128]
   kernel_size: 7
