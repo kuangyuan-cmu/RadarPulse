@@ -2,6 +2,7 @@ dataset/*/**/
 lightning_logs
 logs
 checkpoints
-config
+./config
+./dev.ipynb
 results
 **/__pycache__/
