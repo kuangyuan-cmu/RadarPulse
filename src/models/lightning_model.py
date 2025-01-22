@@ -4,7 +4,7 @@ import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from .network import PulseDetectionNet 
 from .loss import PulseLoss
-from .eval_metrics import peak_error, PulseEval
+from .eval_metrics import PulseEval
 import matplotlib.pyplot as plt
 
 class LitModel(pl.LightningModule):
@@ -45,7 +45,8 @@ class LitModel(pl.LightningModule):
         for name, value in loss_components.items():
             self.log(f'val_{name}', value)
         
-        _, count_error, distance_error, _ = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.5])
+        # _, count_error, distance_error, _ = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.5])
+        _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat, y, heights=[0.5])
         self.log('val_count_error', count_error[0], prog_bar=True)
         self.log('val_distance_error', distance_error[0], prog_bar=True)
         return loss
@@ -60,8 +61,8 @@ class LitModel(pl.LightningModule):
             # peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.45], debug_fnames=batch[2])
             self.evaluation.peak_error(y_hat, y, heights=[0.45], debug_fnames=batch[2])
         
-        heights, count_errors, distance_errors, all_distance_errors = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance)
-        # heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat, y)
+        # heights, count_errors, distance_errors, all_distance_errors = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance)
+        heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat, y)
         
         if self.thrs is None:
             self.thrs = heights

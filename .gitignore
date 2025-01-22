@@ -3,6 +3,6 @@ lightning_logs
 logs
 checkpoints
 ./config
-./dev.ipynb
+dev.ipynb
 results
 **/__pycache__/

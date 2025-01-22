@@ -1,7 +1,7 @@
 data:
   data_path: "dataset/ultragood_0121/"
-  position: "head"
-  signal_type: "phase"
+  position: "neck"
+  signal_type: "both"
   fs: 500  # sampling frequency
   sample_len: 5000      # 10 * fs = 10 * 500
   overlap: 0.8
@@ -13,8 +13,8 @@ training:
   batch_size: 64
   num_workers: 8
   learning_rate: 0.001
-  max_epochs: 200
-  weight_decay: 0.01
+  max_epochs: 30
+  weight_decay: 0.0001
   seed: 42
 
 scheduler:
@@ -25,7 +25,7 @@ scheduler:
 
 network:
   seq_len: 5000  # same as data.sample_len
-  in_channels: 21
+  in_channels: 42
   dual_type: false
   reduce_channels: 8
   hidden_channels: [32, 64, 128]

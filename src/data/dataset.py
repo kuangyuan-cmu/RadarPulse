@@ -20,18 +20,50 @@ class PulseDataset(Dataset):
         self._load_data()
         
     def _load_data(self):
-        file_list = list(self.data_path.glob('*.npz*'))
+        file_list = sorted(list(self.data_path.glob('*.npz*')))
         if len(file_list) == 0:
             raise FileNotFoundError(f"No files found in {self.data_path}")
         
-        for file_item in tqdm.tqdm(file_list):
-            
-            # with open(file_item, 'rb') as indata:
-            #     lnk = LnkParse3.lnk_file(indata)
-            #     file_item = '/' + lnk.get_json()['link_info']['common_path_suffix'].replace("\\", '/')
-            # file_name = file_item.split('/')[-1].split('.')[0]
-            
-            file_name = file_item.name.split('.')[0]
+        # Instead of appending to lists and concatenating at the end,
+        # calculate total size first and pre-allocate tensors
+        total_samples = 0
+        for file_item in tqdm.tqdm(file_list, desc="Calculating total size"):
+            if file_item.suffix == '.lnk':
+                with open(file_item, 'rb') as indata:
+                    lnk = LnkParse3.lnk_file(indata)
+                    file_item = '/' + lnk.get_json()['link_info']['common_path_suffix'].replace("\\", '/')
+            loaded_data = np.load(file_item, mmap_mode='r')
+            if self.is_joint:
+                total_samples += loaded_data['head_label'].shape[0]
+            else:
+                if f'{self.pulse_position}_label' not in loaded_data:
+                    continue
+                total_samples += loaded_data[f'{self.pulse_position}_label'].shape[0]
+
+        # Pre-allocate tensors
+        if self.is_joint:
+            sample_data = self.data[0] if self.data else None  # Get shape from first sample
+            self.data = torch.empty((total_samples, *sample_data.shape[1:]), dtype=torch.float32)
+            self.label = torch.empty((total_samples, *self.label[0].shape[1:]), dtype=torch.float32)
+        else:
+            sample_data = self.data[0] if self.data else None  # Get shape from first sample
+            # self.data = torch.empty((total_samples, *sample_data.shape[1:]), dtype=torch.float32)
+            # self.label = torch.empty((total_samples, *self.label[0].shape[1:]), dtype=torch.float32)
+            self.data = torch.empty((total_samples, 5000, 42), dtype=torch.float32)
+            self.label = torch.empty((total_samples, 5000, 1), dtype=torch.float32)
+
+        # Fill the pre-allocated tensors
+        current_idx = 0
+        
+        for file_item in tqdm.tqdm(file_list, desc="Loading data"):
+            # if the file is a link file, get the real file path
+            if file_item.suffix == '.lnk':
+                with open(file_item, 'rb') as indata:
+                    lnk = LnkParse3.lnk_file(indata)
+                    file_item = '/' + lnk.get_json()['link_info']['common_path_suffix'].replace("\\", '/')
+                file_name = file_item.split('/')[-1].split('.')[0]
+            else:
+                file_name = file_item.name.split('.')[0]
             
             loaded_data = np.load(file_item, mmap_mode='r')
             
@@ -72,6 +104,8 @@ class PulseDataset(Dataset):
                 
                   
             else:
+                if f'{self.pulse_position}_data' not in loaded_data:
+                    continue
                 if self.pulse_position == 'head':
                     data = loaded_data['head_data'].sum(axis=2)
                     label = loaded_data['head_label']
@@ -83,6 +117,10 @@ class PulseDataset(Dataset):
                 elif self.pulse_position == 'wrist':
                     data = loaded_data['wrist_data']
                     label = loaded_data['wrist_label']
+                
+                elif self.pulse_position == 'neck':
+                    data = loaded_data['neck_data']
+                    label = loaded_data['neck_label']
         
                 data = data.reshape(data.shape[0], data.shape[1], -1)
                 data = self.signal_conversion(data, type=self.signal_type)
@@ -93,20 +131,18 @@ class PulseDataset(Dataset):
                     data = (data - data.mean(axis=-2, keepdims=True)) / data.std(axis=-2, keepdims=True)
                 data = torch.from_numpy(data)
                 label = torch.from_numpy(label)
-                
-            self.data.append(data)
-            self.label.append(label)
-            self.file_name.extend([file_name] * label.shape[0])
-        
-        print("Concatenating data and label")
-        self.data = torch.cat(self.data, dim=0).float()
-        self.label = torch.cat(self.label, dim=0).float()
-        
-        # if self.norm_2d:
-        #     self.data = (self.data - self.data.mean(axis=(-1,-2), keepdims=True)) / self.data.std(axis=(-1,-2), keepdims=True)
-        # else:
-        #     self.data = (self.data - self.data.mean(axis=-2, keepdims=True)) / self.data.std(axis=-2, keepdims=True)
-        
+            # print(data.shape, label.shape)
+            batch_size = data.shape[0]
+            self.data[current_idx:current_idx + batch_size] = data
+            self.label[current_idx:current_idx + batch_size] = label
+            self.file_name.extend([file_name] * batch_size)
+            current_idx += batch_size
+            
+            # Free memory
+            del data, label
+            if 'loaded_data' in locals():
+                del loaded_data
+
         print(self.pulse_position, self.signal_type, "Data shape: ", self.data.shape, "Label shape: ", self.label.shape)
         
         return

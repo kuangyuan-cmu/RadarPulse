@@ -31,7 +31,7 @@ class LitModel_joint(pl.LightningModule):
         # (site_1, site_2, min_distance, max_distance)
         self.ptt_queries = [ 
             (1, 2, -130, -60),
-            (0, 2, -100, -40)
+            (0, 2, -105, -35)
         ]
 
     def forward(self, x):
@@ -71,7 +71,9 @@ class LitModel_joint(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x = batch[0]
         y = batch[1]
-
+        names = batch[2]
+        # print(np.unique(names))
+        
         y_hat = self(x)
         loss, loss_components = self.criterion(y_hat, y)
         
@@ -79,8 +81,8 @@ class LitModel_joint(pl.LightningModule):
         for i in range(self.num_sites):
             y_hat_site = y_hat[:, i, :, :]
             y_site = y[:, i, :, :]
-            # if i == 2:
-            #     _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5], debug_fnames=batch[2])
+            # if i == 0:
+            #     _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.6], debug_fnames=batch[2])
             
             heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat_site, y_site)
             if len(self.distance_errs_at_thrs[self.sites_names[i]]) == 0:
@@ -97,7 +99,10 @@ class LitModel_joint(pl.LightningModule):
                 }
                 self.log_dict(result_dict, on_step=True, on_epoch=True)
             
-        
+        if np.unique(names).shape[0] == 1:
+            bname = names[0]
+            print(bname)
+            
         ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.78, 0.66])
         for ptt_metric in ptt_metrics:
             for name, value in ptt_metric.items():
@@ -105,6 +110,7 @@ class LitModel_joint(pl.LightningModule):
         
         for i, ptt_sample in enumerate(ptt_samples):
             for name, value in ptt_sample.items():
+                print(name, np.median(value))
                 self.ptt_samples[i][name].extend(value)
         
         for name, value in loss_components.items():

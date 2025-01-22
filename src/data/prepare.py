@@ -8,8 +8,11 @@ fs = 500
 # total_duration = 170 * fs
 sample_len = 10 * fs
 overlap = 0.8
-intra_session_split_ratio = 1
-    
+intra_session_split_ratio = 0
+
+sites = ['head', 'heart', 'wrist', 'neck']
+sites_gt = ['bcg', 'scg', 'ppg', 'neck']
+
 def intra_session_split(data: dict, label: dict, ratio: float):
     """
     Splits the given data and labels into training and testing sets based on the specified ratio.
@@ -70,55 +73,75 @@ def main(dataset_path):
 
     for exp in tqdm.tqdm(exps):
         gt_files = list(exp.glob('GT*.mat'))
-        head_files = list(exp.glob('head*.mat'))
-        heart_files = list(exp.glob('heart*.mat'))
-        wrist_files = list(exp.glob('wrist*.mat'))
-
-        for gt_file, head_file, heart_file, wrist_file in zip(gt_files, head_files, heart_files, wrist_files):
+        if len(gt_files) != 1:
+            print(f"Warning: {exp} has {len(gt_files)} GT files")
+        
+        # Clear dictionaries at the start of each experiment
+        site_files = {}
+        site_data = {}
+        site_labels = {}
+        
+        # Check which files exist for each site
+        for site in sites:
+            site_files[site] = list(exp.glob(f'{site}*.mat'))
+        
+        # Only process if we have GT files
+        for gt_file in gt_files:
             exp_name = gt_file.name[3:].split('.')[0]
-
-            head_data = scipy.io.loadmat(head_file)['data']
-            heart_data = scipy.io.loadmat(heart_file)['data']
-            wrist_data = scipy.io.loadmat(wrist_file)['data']
-            assert head_data.shape[0] == heart_data.shape[0] == wrist_data.shape[0]
-            print(head_data.shape, heart_data.shape, wrist_data.shape)
-            data_len = head_data.shape[0]
-            data = {
-                'head': head_data,
-                'heart': heart_data,
-                'wrist': wrist_data,
-            }
-
-            # offset = total_duration - data_len # ground truth offset for pilot_1115 dataset
-
-            head_labels = np.zeros((data_len, 1), dtype=int)
-            heart_labels = np.zeros((data_len, 1), dtype=int)
-            wrist_labels = np.zeros((data_len, 1), dtype=int)
-
+            train_file = train_path / f'{exp_name}.npz'
+            dev_file = dev_path / f'{exp_name}.npz'
+            
+            if train_file.exists():
+                continue
+                
+            # Load data for each available site
+            data_len = None
+            for site in sites:
+                if site_files[site]:  # If files exist for this site
+                    # Use memmap to load large files more efficiently
+                    mat_contents = scipy.io.loadmat(site_files[site][0])
+                    site_data[site] = mat_contents['data']
+                    if data_len is None:
+                        data_len = site_data[site].shape[0]
+                    else:
+                        assert site_data[site].shape[0] == data_len, f"Data length mismatch for {site}"
+                    
+                    # Explicitly delete mat_contents to free memory
+                    del mat_contents
+            
+            print("Data shapes:", {site: site_data[site].shape for site in site_data})
+            
+            # Initialize labels more efficiently using numpy
+            site_labels = {site: np.zeros((data_len, 1), dtype=np.int8) for site in site_data}
+            
+            # Load ground truth data with memmap
             gt_data = scipy.io.loadmat(gt_file)
-            head_peaks_gt = gt_data['bcg_peaks_gt'].T
-            wrist_peaks_gt = gt_data['ppg_peaks_gt'].T
-            heart_peaks_gt = gt_data['scg_peaks_gt'].T
-
-            head_labels[head_peaks_gt] = 1
-            wrist_labels[wrist_peaks_gt] = 1
-            heart_labels[heart_peaks_gt] = 1
-
-            label = {
-                'head': head_labels,
-                'heart': heart_labels,
-                'wrist': wrist_labels
-            }
+            for i, site in enumerate(sites):
+                if site in site_data:
+                    peaks_gt = gt_data[f'{sites_gt[i]}_peaks_gt'].T
+                    site_labels[site][peaks_gt] = 1
+            
+            data = {site: site_data[site].copy() for site in site_data}  # Create copies to avoid memory issues
+            label = {site: site_labels[site].copy() for site in site_labels}
+            
+            # Clear original dictionaries to free memory
+            site_data.clear()
+            site_labels.clear()
+            del gt_data
+            
             train_data, train_label, test_data, test_label = intra_session_split(data, label, intra_session_split_ratio)
             sampled_train_data = sliding_window_sampling(train_data, train_label, sample_len, overlap)
             sampled_test_data = sliding_window_sampling(test_data, test_label, sample_len, overlap)
-            print("Exp Name:", exp_name, "Train Data:", len(sampled_train_data['head_data']), "Test Data:", len(sampled_test_data['head_data']))
+            
+            print("Exp Name:", exp_name, "Train Data:", len(sampled_train_data[f'{list(data.keys())[0]}_data']), 
+                  "Test Data:", len(sampled_test_data[f'{list(data.keys())[0]}_data']))
 
-            train_file = train_path / f'{exp_name}.npz'
+            # Save and clear data
             np.savez(train_file, **sampled_train_data)
-
-            dev_file = dev_path / f'{exp_name}.npz'
             np.savez(dev_file, **sampled_test_data)
+            
+            # Clear all data after saving
+            del data, label, train_data, train_label, test_data, test_label, sampled_train_data, sampled_test_data
 
 
 

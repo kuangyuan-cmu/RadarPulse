@@ -47,10 +47,6 @@ def main():
         config = load_config('src/config', env=args.config, to_class=False)
     name = args.name
     
-    # config = load_config('src/config', to_class=False)
-    # # checkpoint = '/home/kyuan/RadarPulse/checkpoints/dataset/phase1_new_1214/wrist_kernel7-epoch=17-val_loss=0.21.ckpt'
-    # checkpoint = '/home/kyuan/RadarPulse/checkpoints/dataset/phase1_new_1214_cross_sessions/heart_reducedfeature_top4-loss-epoch=23-val_loss=0.20.ckpt'
-    # name = None
     
     test(config, checkpoint, name, debug=args.debug)
 

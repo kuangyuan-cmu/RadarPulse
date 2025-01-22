@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/phase1_new_1220/"
+  data_path: "dataset/ultragood_0121/"
   position: "wrist"
   signal_type: "both"
   fs: 500  # sampling frequency

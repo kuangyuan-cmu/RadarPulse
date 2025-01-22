@@ -1,8 +1,8 @@
 data:
-  data_path: "dataset/phase1_new_1220/"
+  data_path: "dataset/phase2_zj_1231_normalSit/"
 
 training:
-  batch_size: 64
+  batch_size: 26
   num_workers: 8
   learning_rate: 0.001
   max_epochs: 200
