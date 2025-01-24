@@ -4,11 +4,11 @@ import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from .network_joint import MultiSitePulseDetectionNet
 from .loss import MultiSitePulseLoss
-from .eval_metrics import peak_error, PulseEval
+from .eval_metrics import PulseEval
 import matplotlib.pyplot as plt
 
 class LitModel_joint(pl.LightningModule):
-    def __init__(self, config_list, training_config, checkpoint_paths = None, debug=False):
+    def __init__(self, config_list, training_config, checkpoint_paths=None, debug=False, enable_fusion=True):
         super().__init__()
         self.save_hyperparameters()
         self.config_list = config_list
@@ -19,7 +19,7 @@ class LitModel_joint(pl.LightningModule):
         
         self.network_configs = [config.network for config in config_list]
         self.loss_configs = [config.loss for config in config_list]
-        self.model = MultiSitePulseDetectionNet(self.network_configs)
+        self.model = MultiSitePulseDetectionNet(self.network_configs, enable_fusion=enable_fusion)
         self.criterion = MultiSitePulseLoss(self.loss_configs, names=self.sites_names)
         self.evaluation = PulseEval(peak_min_distance=self.loss_configs[0].min_peak_distance)
         
@@ -62,7 +62,8 @@ class LitModel_joint(pl.LightningModule):
         for i in range(self.num_sites):
             y_hat_site = y_hat[:, i, :, :]
             y_site = y[:, i, :, :]
-            _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5])
+            # _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5])
+            _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.5])
             self.log(f'val_count_error_{self.sites_names[i]}', count_error[0], prog_bar=True)
             self.log(f'val_distance_error_{self.sites_names[i]}', distance_error[0], prog_bar=True)
             

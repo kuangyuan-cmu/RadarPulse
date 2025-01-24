@@ -60,6 +60,7 @@ def train(configs, checkpoint_paths, joint_model_checkpoint_path=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--head-checkpoint', type=str, help='Path to checkpoint file for head model')
+    
     parser.add_argument('--heart-checkpoint', type=str, help='Path to checkpoint file for heart model')
     parser.add_argument('--wrist-checkpoint', type=str, help='Path to checkpoint file for wrist model')
     parser.add_argument('--head-model-config', type=str, help='Path to config file for head model')
@@ -67,6 +68,7 @@ def main():
     parser.add_argument('--wrist-model-config', type=str, help='Path to config file for wrist model')
     
     parser.add_argument('--joint-model-checkpoint', type=str, help='Path to config file for wrist model')
+    
     args = parser.parse_args()
 
     checkpoints = [args.head_checkpoint, args.heart_checkpoint, args.wrist_checkpoint]

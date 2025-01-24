@@ -7,13 +7,26 @@ import LnkParse3
 
 
 class PulseDataset(Dataset):
-    def __init__(self, data_path, pulse_position, signal_type, norm_2d=False):
+    def __init__(self, data_path, data_config):
         super().__init__()
         self.data_path = Path(data_path)
-        self.pulse_position = pulse_position
-        self.norm_2d = norm_2d
-        self.signal_type = signal_type
-        self.is_joint = isinstance(self.pulse_position, list)
+        self.data_config = data_config
+        self.is_joint = isinstance(self.data_config, list)
+        
+        if self.is_joint:
+            self.pulse_position = [config.position for config in self.data_config]
+            self.signal_type = [config.signal_type for config in self.data_config]
+            self.norm_2d = [config.norm_2d for config in self.data_config]
+            self.sample_len = self.data_config[0].sample_len
+            n_channels = [config.n_channels for config in self.data_config]
+            self.in_channels = max(n_channels)
+        else:
+            self.pulse_position = self.data_config.position
+            self.signal_type = self.data_config.signal_type
+            self.norm_2d = self.data_config.norm_2d
+            self.sample_len = self.data_config.sample_len
+            self.in_channels = self.data_config.n_channels
+        
         self.data = []
         self.label = []
         self.file_name = []
@@ -34,7 +47,7 @@ class PulseDataset(Dataset):
                     file_item = '/' + lnk.get_json()['link_info']['common_path_suffix'].replace("\\", '/')
             loaded_data = np.load(file_item, mmap_mode='r')
             if self.is_joint:
-                total_samples += loaded_data['head_label'].shape[0]
+                total_samples += loaded_data['heart_label'].shape[0]
             else:
                 if f'{self.pulse_position}_label' not in loaded_data:
                     continue
@@ -42,15 +55,11 @@ class PulseDataset(Dataset):
 
         # Pre-allocate tensors
         if self.is_joint:
-            sample_data = self.data[0] if self.data else None  # Get shape from first sample
-            self.data = torch.empty((total_samples, *sample_data.shape[1:]), dtype=torch.float32)
-            self.label = torch.empty((total_samples, *self.label[0].shape[1:]), dtype=torch.float32)
+            self.data = torch.empty((total_samples, len(self.pulse_position), self.sample_len, self.in_channels), dtype=torch.float32)
+            self.label = torch.empty((total_samples, len(self.pulse_position), self.sample_len, 1), dtype=torch.float32)
         else:
-            sample_data = self.data[0] if self.data else None  # Get shape from first sample
-            # self.data = torch.empty((total_samples, *sample_data.shape[1:]), dtype=torch.float32)
-            # self.label = torch.empty((total_samples, *self.label[0].shape[1:]), dtype=torch.float32)
-            self.data = torch.empty((total_samples, 5000, 42), dtype=torch.float32)
-            self.label = torch.empty((total_samples, 5000, 1), dtype=torch.float32)
+            self.data = torch.empty((total_samples, self.sample_len, self.in_channels), dtype=torch.float32)
+            self.label = torch.empty((total_samples, self.sample_len, 1), dtype=torch.float32)
 
         # Fill the pre-allocated tensors
         current_idx = 0
@@ -68,59 +77,48 @@ class PulseDataset(Dataset):
             loaded_data = np.load(file_item, mmap_mode='r')
             
             if self.is_joint:
-                self.norm_2d = False
+                data_dict = {}
+                label_dict = {}
                 
-                head_data = loaded_data['head_data'].sum(axis=2)
-                head_label = loaded_data['head_label']
-                heart_data = loaded_data['heart_data']
-                heart_label = loaded_data['heart_label']
-                wrist_data = loaded_data['wrist_data']
-                wrist_label = loaded_data['wrist_label']
+                # Load data and labels for each position
+                for i, pos in enumerate(self.pulse_position):
+                    data = loaded_data[f'{pos}_data']
+                    if pos == 'head':
+                        data = data.sum(axis=2)
+                    data = data.reshape(data.shape[0], self.sample_len, -1)
+                    data = self.signal_conversion(data, type=self.signal_type[self.pulse_position.index(pos)])
+                    if self.norm_2d[i]:
+                        data = (data - data.mean(axis=(-1,-2), keepdims=True)) / data.std(axis=(-1,-2), keepdims=True)
+                    else:
+                        data = (data - data.mean(axis=-2, keepdims=True)) / data.std(axis=-2, keepdims=True)
+                    data_dict[pos] = data
+                    label_dict[pos] = loaded_data[f'{pos}_label']
                 
-                head_data = head_data.reshape(head_data.shape[0], head_data.shape[1], -1)
-                heart_data = heart_data.reshape(heart_data.shape[0], heart_data.shape[1], -1)
-                wrist_data = wrist_data.reshape(wrist_data.shape[0], wrist_data.shape[1], -1)
+                # Create tensors with predefined dimensions
+                data = torch.zeros((data_dict[self.pulse_position[0]].shape[0], len(self.pulse_position), 
+                                  self.sample_len, self.in_channels))
+                label = torch.zeros((data_dict[self.pulse_position[0]].shape[0], len(self.pulse_position),
+                                   self.sample_len, 1))
                 
-                head_data = self.signal_conversion(head_data, type=self.signal_type[self.pulse_position.index('head')])
-                heart_data = self.signal_conversion(heart_data, type=self.signal_type[self.pulse_position.index('heart')])
-                wrist_data = self.signal_conversion(wrist_data, type=self.signal_type[self.pulse_position.index('wrist')])
-                
-                # normalize the data
-                head_data = (head_data - head_data.mean(axis=-2, keepdims=True)) / head_data.std(axis=-2, keepdims=True)
-                heart_data = (heart_data - heart_data.mean(axis=-2, keepdims=True)) / heart_data.std(axis=-2, keepdims=True)
-                wrist_data = (wrist_data - wrist_data.mean(axis=-2, keepdims=True)) / wrist_data.std(axis=-2, keepdims=True)
-                
-                # convert the last dimension to share the same length
-                max_dim = max(head_data.shape[-1], heart_data.shape[-1], wrist_data.shape[-1])
-                data = torch.zeros((head_data.shape[0], 3, head_data.shape[1], max_dim))
-                label = torch.zeros((head_data.shape[0], 3, head_data.shape[1], 1))
-                data[:, 0, :, :head_data.shape[-1]] = torch.from_numpy(head_data)
-                data[:, 1, :, :heart_data.shape[-1]] = torch.from_numpy(heart_data)
-                data[:, 2, :, :wrist_data.shape[-1]] = torch.from_numpy(wrist_data)
-            
-                label[:, 0, :, :] = torch.from_numpy(head_label)
-                label[:, 1, :, :] = torch.from_numpy(heart_label)
-                label[:, 2, :, :] = torch.from_numpy(wrist_label)
+                # Fill tensors
+                for i, pos in enumerate(self.pulse_position):
+                    data[:, i, :, :data_dict[pos].shape[-1]] = torch.from_numpy(data_dict[pos])
+                    label[:, i, :, :] = torch.from_numpy(label_dict[pos])
                 
                   
             else:
-                if f'{self.pulse_position}_data' not in loaded_data:
+                data_key = f'{self.pulse_position}_data'
+                label_key = f'{self.pulse_position}_label'
+                
+                if data_key not in loaded_data:
                     continue
+                    
+                data = loaded_data[data_key]
+                label = loaded_data[label_key]
+                
+                # Special handling for head position
                 if self.pulse_position == 'head':
-                    data = loaded_data['head_data'].sum(axis=2)
-                    label = loaded_data['head_label']
-            
-                elif self.pulse_position == 'heart':
-                    data = loaded_data['heart_data']
-                    label = loaded_data['heart_label']
-                
-                elif self.pulse_position == 'wrist':
-                    data = loaded_data['wrist_data']
-                    label = loaded_data['wrist_label']
-                
-                elif self.pulse_position == 'neck':
-                    data = loaded_data['neck_data']
-                    label = loaded_data['neck_label']
+                    data = data.sum(axis=2)
         
                 data = data.reshape(data.shape[0], data.shape[1], -1)
                 data = self.signal_conversion(data, type=self.signal_type)
@@ -131,6 +129,7 @@ class PulseDataset(Dataset):
                     data = (data - data.mean(axis=-2, keepdims=True)) / data.std(axis=-2, keepdims=True)
                 data = torch.from_numpy(data)
                 label = torch.from_numpy(label)
+                
             # print(data.shape, label.shape)
             batch_size = data.shape[0]
             self.data[current_idx:current_idx + batch_size] = data

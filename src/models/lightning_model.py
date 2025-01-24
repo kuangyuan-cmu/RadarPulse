@@ -56,6 +56,18 @@ class LitModel(pl.LightningModule):
         y = batch[1]
 
         y_hat = self(x)
+        
+        # x_cpu = x.detach().cpu().numpy()
+        # y_cpu = y.detach().cpu().numpy()
+        # y_hat_cpu = y_hat.detach().cpu().numpy()
+        # from scipy import signal
+        # b, a = signal.butter(2, 30/250, btype='low', analog=False)
+        # nsig = 64-5
+        # nbin = 10
+        # filtered_data = signal.filtfilt(b, a, x_cpu[nsig,:,nbin])
+        # plt.plot(np.diff(filtered_data,n=2))
+        # plt.plot((y_cpu[nsig,:,0]-0.5)/100)
+        
         loss, loss_components = self.criterion(y_hat, y)
         if self.debug:
             # peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.45], debug_fnames=batch[2])

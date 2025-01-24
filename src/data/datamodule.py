@@ -7,15 +7,15 @@ class PulseDataModule(pl.LightningDataModule):
         super().__init__()
         # judge if data_config is a list
         self.data_path = data_path
-        if isinstance(data_config, list):
-            self.pulse_position = [config.position for config in data_config]
-            self.signal_type = [config.signal_type for config in data_config]
-            self.norm_2d = [config.norm_2d for config in data_config]
-        else:
-            self.pulse_position = data_config.position
-            self.signal_type = data_config.signal_type
-            self.norm_2d = data_config.norm_2d
-            
+        # if isinstance(data_config, list):
+        #     self.pulse_position = [config.position for config in data_config]
+        #     self.signal_type = [config.signal_type for config in data_config]
+        #     self.norm_2d = [config.norm_2d for config in data_config]
+        # else:
+        #     self.pulse_position = data_config.position
+        #     self.signal_type = data_config.signal_type
+        #     self.norm_2d = data_config.norm_2d
+        self.data_config = data_config
         self.batch_size = batch_size
         self.num_workers = num_workers
        
@@ -24,33 +24,25 @@ class PulseDataModule(pl.LightningDataModule):
             print("Setting up training dataset")
             self.train_dataset = PulseDataset(
                 f"{self.data_path}/train",
-                self.pulse_position,
-                self.signal_type,
-                self.norm_2d
+                self.data_config
             )
             print("Setting up validation dataset")
             self.val_dataset = PulseDataset(
                 f"{self.data_path}/dev",
-                self.pulse_position,
-                self.signal_type,
-                self.norm_2d
+                self.data_config
             ) 
         if stage == 'validate':
             print("Setting up validation dataset")
             self.val_dataset = PulseDataset(
                 f"{self.data_path}/dev",
-                self.pulse_position,
-                self.signal_type,
-                self.norm_2d
+                self.data_config
             )
             
         if stage == 'test':
             print("Setting up testing dataset")
             self.test_dataset = PulseDataset(
                 f"{self.data_path}/dev",
-                self.pulse_position,
-                self.signal_type,
-                self.norm_2d
+                self.data_config
             )
             
     def train_dataloader(self):

@@ -65,7 +65,7 @@ class CrossSiteTemporalAttention(nn.Module):
         return [output[:, i, :, :] for i in range(num_sites)]
 
 class MultiSitePulseDetectionNet(nn.Module):
-    def __init__(self, site_configs):
+    def __init__(self, site_configs, enable_fusion=True):
         super().__init__()
         
         self.num_sites = len(site_configs)
@@ -74,15 +74,19 @@ class MultiSitePulseDetectionNet(nn.Module):
         self.site_networks = nn.ModuleList([
             PulseDetectionNet(**config) for config in site_configs
         ])
-        self.site_in_channels = [config.in_channels for config in site_configs]
+        
+        self.site_in_channels = [config['in_channels'] for config in site_configs]
         # Cross-site fusion
         lstm_hidden_size = site_configs[0]['lstm_hidden_size'] * 2  # bidirectional
-        # self.cross_site_attention = CrossSiteAttention(
-        #     hidden_size=lstm_hidden_size
-        # )
-        self.cross_site_attention = CrossSiteTemporalAttention(
-            hidden_size=lstm_hidden_size
-        )
+        
+        self.enable_fusion = enable_fusion
+        if enable_fusion:
+            # self.cross_site_attention = CrossSiteAttention(
+            #     hidden_size=lstm_hidden_size
+            # )
+            self.cross_site_attention = CrossSiteTemporalAttention(
+                hidden_size=lstm_hidden_size
+            )
         
     def forward(self, site_inputs):
         # size_inputs: cell
@@ -100,7 +104,10 @@ class MultiSitePulseDetectionNet(nn.Module):
             skip_connections.append(skip)
             
         # Cross-site fusion
-        fused_features = self.cross_site_attention(encoded_features)
+        if self.enable_fusion:
+            fused_features = self.cross_site_attention(encoded_features)
+        else:
+            fused_features = encoded_features
         
         # Decode each site
         outputs = []
@@ -178,10 +185,11 @@ if __name__ == '__main__':
             'lstm_hidden_size': lstm_hidden_size
         },
     ]
-    
-    model = MultiSitePulseDetectionNet(site_configs)
+
+    model = MultiSitePulseDetectionNet(site_configs, enable_fusion=True)
     info = summary(model, input_size=(3,16, seq_len, in_channels), device='cpu')
-    inputs = (torch.randn(16, seq_len, in_channels), torch.randn(16, seq_len, in_channels*2), torch.randn(16, seq_len, in_channels))
+    # inputs = (torch.randn(16, seq_len, in_channels), torch.randn(16, seq_len, in_channels*2), torch.randn(16, seq_len, in_channels))
+    inputs = torch.randn(16, 3, seq_len, in_channels*2)
 
     outputs = model(inputs)
     print(outputs.shape)
