@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/ultragood_0121/"
+  data_path: "dataset/ultragood_v2_0123/"
   position: "heart"
   signal_type: "both"
   fs: 500  # sampling frequency
@@ -13,7 +13,7 @@ training:
   batch_size: 64
   num_workers: 8
   learning_rate: 0.001
-  max_epochs: 200
+  max_epochs: 30
   weight_decay: 0.0001
   seed: 42
 

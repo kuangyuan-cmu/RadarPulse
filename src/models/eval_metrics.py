@@ -56,10 +56,12 @@ class PulseEval():
             signed_distances_list.append(signed_distances)
         return target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list
     
-    def debug_plot(self, pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames):
+    def debug_plot(self, pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames, save_path='results/figures'):
         fig_width = 4
         fig_height = 16
-        fig, axs = plt.subplots(fig_height, fig_width)
+        fig = plt.figure(figsize=(10, 24))
+        gs = fig.add_gridspec(fig_height, fig_width)
+        axs = gs.subplots()
 
         for i in range(target.shape[0]):
             plt_x = i // fig_width
@@ -74,9 +76,14 @@ class PulseEval():
                     axs[plt_x, plt_y].plot(peak, pred[i, peak], 'x', color=color)
                     axs[plt_x, plt_y].text(peak, pred[i, peak], str(np.abs(signed_distances_list[i][pi])), fontsize=11, color=color)
             
-            axs[plt_x, plt_y].set_title(debug_fnames[i])
+            axs[plt_x, plt_y].set_title(debug_fnames[i], fontsize=6)
         plt.subplots_adjust(left=0.05, right=0.95, top=0.99, bottom=0.01, hspace=0.7)
-        plt.show()
+        if save_path:
+            save_name = f'{save_path}/{debug_fnames[0]}.png'
+            plt.savefig(save_name, dpi=300, bbox_inches='tight')
+            print(f'Saved figure to {save_name}')
+        else:
+            plt.show()
         
     def peak_error_at_height(self, target, pred, peak_min_height: float = 0.5, debug_fnames=None):
         target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list = self.peak_detection(target, pred, peak_min_height)

@@ -42,19 +42,24 @@ def main():
     parser.add_argument('--head-checkpoint', type=str, help='Path to checkpoint file for head model')
     parser.add_argument('--heart-checkpoint', type=str, help='Path to checkpoint file for heart model')
     parser.add_argument('--wrist-checkpoint', type=str, help='Path to checkpoint file for wrist model')
-    parser.add_argument('--head-model-config', type=str, help='Path to config file for head model')
-    parser.add_argument('--heart-model-config', type=str, help='Path to config file for heart model')
-    parser.add_argument('--wrist-model-config', type=str, help='Path to config file for wrist model')
+    parser.add_argument('--neck-checkpoint', type=str, help='Path to checkpoint file for neck model')
+    
+    parser.add_argument('--head-model-config', type=str, help='Path to config file for head model', default='head')
+    parser.add_argument('--heart-model-config', type=str, help='Path to config file for heart model', default='heart')
+    parser.add_argument('--wrist-model-config', type=str, help='Path to config file for wrist model', default='wrist')
+    parser.add_argument('--neck-model-config', type=str, help='Path to config file for neck model', default='neck')
+    
     parser.add_argument('--output', type=str, required=True, help='Output path for joint model checkpoint')
     
     args = parser.parse_args()
 
-    checkpoints = [args.head_checkpoint, args.heart_checkpoint, args.wrist_checkpoint]
+    checkpoints = [args.head_checkpoint, args.heart_checkpoint, args.wrist_checkpoint, args.neck_checkpoint]
 
     configs = [
         load_config('src/config', env=args.head_model_config),
         load_config('src/config', env=args.heart_model_config),
-        load_config('src/config', env=args.wrist_model_config)
+        load_config('src/config', env=args.wrist_model_config),
+        load_config('src/config', env=args.neck_model_config)
     ]
         
     create_joint_model(configs, checkpoints, args.output)

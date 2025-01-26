@@ -1,8 +1,8 @@
 data:
-  data_path: "dataset/ultragood_0121/"
+  data_path: "dataset/ultragood_v2_0123/"
 
 training:
-  batch_size: 64
+  batch_size: 51
   num_workers: 8
   learning_rate: 0.001
   max_epochs: 200

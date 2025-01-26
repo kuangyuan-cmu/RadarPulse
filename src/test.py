@@ -6,13 +6,14 @@ from config.config_utils import load_config
 import argparse
 import numpy as np
 
-def test(config, checkpoint_path, exp_name, debug=False):
+def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
     # Initialize data module
     data_module = PulseDataModule(
         data_path=config.data.data_path,
         data_config=config.data,
         batch_size=config.training.batch_size,
         num_workers=config.training.num_workers,
+        leave_out_users=leave_out_users
     )
 
     model = LitModel(config, debug=debug)
@@ -35,6 +36,7 @@ def main():
     parser.add_argument('--config', type=str, help='Path to config file')
     parser.add_argument('--name', type=str, help='Name of the experiment')
     parser.add_argument('--debug' , action='store_true', help='Debug mode')
+    parser.add_argument('--leave_out_users', type=str, help='Leave out users')
     
     args = parser.parse_args()
     
@@ -48,7 +50,8 @@ def main():
     name = args.name
     
     
-    test(config, checkpoint, name, debug=args.debug)
+    test(config, checkpoint, name, debug=args.debug, leave_out_users=args.leave_out_users)
+
 
 if __name__ == '__main__':
     main()

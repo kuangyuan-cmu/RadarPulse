@@ -7,10 +7,12 @@ import LnkParse3
 
 
 class PulseDataset(Dataset):
-    def __init__(self, data_path, data_config):
+    def __init__(self, data_path, data_config, include_users=None, exclude_users=None):
         super().__init__()
         self.data_path = Path(data_path)
         self.data_config = data_config
+        self.include_users = include_users
+        self.exclude_users = exclude_users
         self.is_joint = isinstance(self.data_config, list)
         
         if self.is_joint:
@@ -33,7 +35,24 @@ class PulseDataset(Dataset):
         self._load_data()
         
     def _load_data(self):
-        file_list = sorted(list(self.data_path.glob('*.npz*')))
+        
+        if self.include_users is None and self.exclude_users is None:
+            file_list = sorted(list(self.data_path.glob('*.npz*')))
+        else:
+            user_dirs = [d for d in self.data_path.glob('processed/*/') if d.is_dir()]
+            if self.include_users:
+                user_dirs = [d for d in user_dirs if d.name in self.include_users]
+            if self.exclude_users:
+                user_dirs = [d for d in user_dirs if d.name not in self.exclude_users]
+                
+            if len(user_dirs) == 0:
+                raise FileNotFoundError(f"No valid user directories found in {self.data_path}")
+            file_list = []
+            for user_dir in user_dirs:
+                file_list.extend(list(user_dir.glob('*.npz*')))
+            file_list.sort()
+        
+        
         if len(file_list) == 0:
             raise FileNotFoundError(f"No files found in {self.data_path}")
         

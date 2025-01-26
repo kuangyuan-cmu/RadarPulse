@@ -144,11 +144,94 @@ def main(dataset_path):
             del data, label, train_data, train_label, test_data, test_label, sampled_train_data, sampled_test_data
 
 
+def main_v2(dataset_path):
+    dataset_path = Path(dataset_path)
+    users = (dataset_path / 'raw').glob('*')
+
+    processed_path = dataset_path / 'processed'
+    processed_path.mkdir(exist_ok=True)
+
+    for user in users:
+        print(f"Processing user: {user.name}")
+        user_path = processed_path / user.name
+        user_path.mkdir(exist_ok=True)
+        
+        exps = user.glob('*')
+        
+        for exp in tqdm.tqdm(exps):
+            gt_files = list(exp.glob('GT*.mat'))
+            if len(gt_files) != 1:
+                print(f"Warning: {exp} has {len(gt_files)} GT files")
+            
+            # Clear dictionaries at the start of each experiment
+            site_files = {}
+            site_data = {}
+            site_labels = {}
+            
+            # Check which files exist for each site
+            for site in sites:
+                site_files[site] = list(exp.glob(f'{site}*.mat'))
+            
+            # Only process if we have GT files
+            for gt_file in gt_files:
+                exp_name = gt_file.name[3:].split('.')[0]
+                processed_file = user_path / f'{exp_name}.npz'
+                
+                if processed_file.exists():
+                    continue
+                    
+                # Load data for each available site
+                data_len = None
+                for site in sites:
+                    if site_files[site]:  # If files exist for this site
+                        # Use memmap to load large files more efficiently
+                        mat_contents = scipy.io.loadmat(site_files[site][0])
+                        site_data[site] = mat_contents['data']
+                        if data_len is None:
+                            data_len = site_data[site].shape[0]
+                        else:
+                            assert site_data[site].shape[0] == data_len, f"Data length mismatch for {site}"
+                        
+                        # Explicitly delete mat_contents to free memory
+                        del mat_contents
+                
+                print("Data shapes:", {site: site_data[site].shape for site in site_data})
+                
+                # Initialize labels more efficiently using numpy
+                site_labels = {site: np.zeros((data_len, 1), dtype=np.int8) for site in site_data}
+                
+                # Load ground truth data with memmap
+                gt_data = scipy.io.loadmat(gt_file)
+                for i, site in enumerate(sites):
+                    if site in site_data:
+                        peaks_gt = gt_data[f'{sites_gt[i]}_peaks_gt'].T
+                        site_labels[site][peaks_gt] = 1
+                
+                data = {site: site_data[site].copy() for site in site_data}  # Create copies to avoid memory issues
+                label = {site: site_labels[site].copy() for site in site_labels}
+                
+                # Clear original dictionaries to free memory
+                site_data.clear()
+                site_labels.clear()
+                del gt_data
+                
+                sampled_data = sliding_window_sampling(data, label, sample_len, overlap)
+                
+                print("Exp Name:", exp_name, "Samples:", len(sampled_data[f'{list(data.keys())[0]}_data']))
+
+                # Save and clear data
+                np.savez(processed_file, **sampled_data)
+                
+                # Clear all data after saving
+                del data, label, sampled_data
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process .mat files and generate training and testing set.')
     parser.add_argument('dataset_path', type=str, help='Path to the dataset directory')
     args = parser.parse_args()
-    main(args.dataset_path)
+    # main(args.dataset_path)
+    main_v2(args.dataset_path)
     
     # main('/home/kyuan/RadarPulse/dataset/phase1_1212')

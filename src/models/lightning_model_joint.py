@@ -30,8 +30,9 @@ class LitModel_joint(pl.LightningModule):
         
         # (site_1, site_2, min_distance, max_distance)
         self.ptt_queries = [ 
-            (1, 2, -130, -60),
-            (0, 2, -105, -35)
+            (1, 2, -100, -50),
+            # (0, 2, -105, -35)
+            (1, 3, -25, 5)
         ]
 
     def forward(self, x):
@@ -104,7 +105,7 @@ class LitModel_joint(pl.LightningModule):
             bname = names[0]
             print(bname)
             
-        ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.78, 0.66])
+        ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.86, 0.64, 0.6])
         for ptt_metric in ptt_metrics:
             for name, value in ptt_metric.items():
                 self.log(name, value)
