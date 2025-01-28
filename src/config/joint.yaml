@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/ultragood_v2_0123/"
+  data_path: "dataset/kuangzj_bptest_0128/"
 
 training:
   batch_size: 51

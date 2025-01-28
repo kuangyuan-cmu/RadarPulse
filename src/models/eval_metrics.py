@@ -56,7 +56,7 @@ class PulseEval():
             signed_distances_list.append(signed_distances)
         return target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list
     
-    def debug_plot(self, pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames, save_path='results/figures'):
+    def debug_plot(self, pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames):
         fig_width = 4
         fig_height = 16
         fig = plt.figure(figsize=(10, 24))
@@ -78,6 +78,9 @@ class PulseEval():
             
             axs[plt_x, plt_y].set_title(debug_fnames[i], fontsize=6)
         plt.subplots_adjust(left=0.05, right=0.95, top=0.99, bottom=0.01, hspace=0.7)
+        
+        # save_path='results/figures/wrist'
+        save_path = None
         if save_path:
             save_name = f'{save_path}/{debug_fnames[0]}.png'
             plt.savefig(save_name, dpi=300, bbox_inches='tight')
