@@ -6,3 +6,4 @@ checkpoints
 dev.ipynb
 results
 **/__pycache__/
+.vscode

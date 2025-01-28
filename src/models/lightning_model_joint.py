@@ -6,7 +6,7 @@ from .network_joint import MultiSitePulseDetectionNet
 from .loss import MultiSitePulseLoss
 from .eval_metrics import PulseEval
 import matplotlib.pyplot as plt
-
+from scipy import stats
 class LitModel_joint(pl.LightningModule):
     def __init__(self, config_list, training_config, checkpoint_paths=None, debug=False, enable_fusion=True):
         super().__init__()
@@ -30,9 +30,9 @@ class LitModel_joint(pl.LightningModule):
         
         # (site_1, site_2, min_distance, max_distance)
         self.ptt_queries = [ 
-            (1, 2, -100, -50),
+            # (1, 2, -100, -50),
             # (0, 2, -105, -35)
-            (1, 3, -25, 5)
+            (1, 3, -22, 2)
         ]
 
     def forward(self, x):
@@ -106,13 +106,28 @@ class LitModel_joint(pl.LightningModule):
             print(bname)
             
         ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.86, 0.64, 0.6])
+        
+        gt_ptt = ptt_samples[0]['gt_ptt']
+        pred_ptt = ptt_samples[0]['pred_ptt']
+        # plot these two and save the figure
+        plt.plot(gt_ptt, label='gt_ptt')
+        plt.plot(pred_ptt, label='pred_ptt')
+        plt.ylim(self.ptt_queries[0][2], self.ptt_queries[0][3])
+        plt.legend()
+        plt.savefig(f'results/ptt_figures/{bname}_ptt_heart2neck.png')
+        plt.close()
+        
         for ptt_metric in ptt_metrics:
             for name, value in ptt_metric.items():
                 self.log(name, value)
         
         for i, ptt_sample in enumerate(ptt_samples):
             for name, value in ptt_sample.items():
-                print(name, np.median(value))
+                # median, _ = stats.mode(np.array(value, dtype=int))
+                
+                median = np.median(value)
+                print(name, median)
+                self.median_ptt_batch[i][name].append(median)
                 self.ptt_samples[i][name].extend(value)
         
         for name, value in loss_components.items():
@@ -151,7 +166,9 @@ class LitModel_joint(pl.LightningModule):
         self.ptt_samples = [
             {'gt_ptt': [], 'pred_ptt': []} for _ in range(len(self.ptt_queries))
         ]
-        
+        self.median_ptt_batch = [
+            {'gt_ptt': [], 'pred_ptt': []} for _ in range(len(self.ptt_queries))
+        ]
     def on_test_epoch_end(self):
         thrs = np.array(self.thrs)
         self.results = {
@@ -168,5 +185,9 @@ class LitModel_joint(pl.LightningModule):
         
         self.results['ptt_samples'] = self.ptt_samples
         self.results['ptt_queries'] = self.ptt_queries
+        
+        corr = np.corrcoef(self.median_ptt_batch[0]['gt_ptt'], self.median_ptt_batch[0]['pred_ptt'])
+        print(self.median_ptt_batch[0])
+        print(f'corr: {corr}')
     
     
