@@ -2,7 +2,7 @@ data:
   data_path: "dataset/kuangzj_bptest_0128/"
 
 training:
-  batch_size: 51
+  batch_size: 36
   num_workers: 8
   learning_rate: 0.001
   max_epochs: 200

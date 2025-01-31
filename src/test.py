@@ -5,6 +5,7 @@ from models.lightning_model import LitModel
 from config.config_utils import load_config
 import argparse
 import numpy as np
+import pandas as pd
 
 def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
     # Initialize data module
@@ -29,6 +30,7 @@ def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
     
     if exp_name:
         np.save(f'results/{exp_name}.npy', model.results, allow_pickle=True)
+        pd.DataFrame(model.debug_metrics).to_csv(f'results/{exp_name}_debug.csv', index=False)
    
 def main():
     parser = argparse.ArgumentParser()

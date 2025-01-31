@@ -21,7 +21,7 @@ class PulseEval():
         
         # match the predicted peaks to target peaks, if can not find a matched predicted peak within peak_min_distance, add a None
         matched_peaks_list = []
-        matched_distances_list = []
+        # matched_distances_list = []
         signed_distances_list = []
         for i, (pred_peaks, target_peaks) in enumerate(zip(pred_peaks_list, target_peaks_list)):
             matched_peaks = []
@@ -33,7 +33,7 @@ class PulseEval():
                 matched_distances.extend([None] * len(target_peaks))
                 signed_distances.extend([None] * len(target_peaks))
                 matched_peaks_list.append(matched_peaks)
-                matched_distances_list.append(matched_distances)
+                # matched_distances_list.append(matched_distances)
                 signed_distances_list.append(signed_distances)
                 continue
             
@@ -52,14 +52,15 @@ class PulseEval():
                     matched_distances.append(None)
                     signed_distances.append(None)
             matched_peaks_list.append(matched_peaks)
-            matched_distances_list.append(matched_distances)
+            # matched_distances_list.append(matched_distances)
             signed_distances_list.append(signed_distances)
-        return target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list
+        # return target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list
+        return target_peaks_list, matched_peaks_list, signed_distances_list
     
     def debug_plot(self, pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames):
         fig_width = 4
         fig_height = 16
-        fig = plt.figure(figsize=(10, 24))
+        fig = plt.figure(figsize=(10, 20))
         gs = fig.add_gridspec(fig_height, fig_width)
         axs = gs.subplots()
 
@@ -79,7 +80,7 @@ class PulseEval():
             axs[plt_x, plt_y].set_title(debug_fnames[i], fontsize=6)
         plt.subplots_adjust(left=0.05, right=0.95, top=0.99, bottom=0.01, hspace=0.7)
         
-        # save_path='results/figures/wrist'
+        # save_path='results/debug_0123data'
         save_path = None
         if save_path:
             save_name = f'{save_path}/{debug_fnames[0]}.png'
@@ -89,19 +90,22 @@ class PulseEval():
             plt.show()
         
     def peak_error_at_height(self, target, pred, peak_min_height: float = 0.5, debug_fnames=None):
-        target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list = self.peak_detection(target, pred, peak_min_height)
+        # target_peaks_list, matched_peaks_list, matched_distances_list, signed_distances_list = self.peak_detection(target, pred, peak_min_height)
+        target_peaks_list, matched_peaks_list, signed_distances_list = self.peak_detection(target, pred, peak_min_height)
         if debug_fnames:
             self.debug_plot(pred, target, target_peaks_list, matched_peaks_list, signed_distances_list, debug_fnames)
         
         # aggregate the matched distances
         matched_distances_all = []
+        signed_matched_distances_all = []
         peak_num = 0
-        for matched_distances in matched_distances_list:
-            peak_num += len(matched_distances)
-            matched_distances_all.extend([d for d in matched_distances if d is not None])
-
+        for signed_distances in signed_distances_list:
+            peak_num += len(signed_distances)
+            matched_distances_all.extend([abs(d) for d in signed_distances if d is not None])
+            signed_matched_distances_all.extend([d for d in signed_distances if d is not None])
         error_count_rate = (peak_num - len(matched_distances_all)) / peak_num
-        return error_count_rate, matched_distances_all
+        
+        return error_count_rate, matched_distances_all, signed_matched_distances_all
     
     def peak_error(self, pred: torch.Tensor, target: torch.Tensor, heights: list = [], debug_fnames=None) -> Dict[str, float]:
         pred_np = pred.detach().cpu().numpy()
@@ -110,13 +114,13 @@ class PulseEval():
             heights = np.arange(0.1, 0.96, 0.01)
         avg_count_error_rates = []
         distance_errors = []
-        median_distance_errors = []
+        signed_distance_errors = []
         for height in heights:
-            error_count_rate, matched_distances = self.peak_error_at_height(target_np, pred_np, peak_min_height=height, debug_fnames=debug_fnames)
+            error_count_rate, matched_distances, signed_matched_distances = self.peak_error_at_height(target_np, pred_np, peak_min_height=height, debug_fnames=debug_fnames)
             avg_count_error_rates.append(error_count_rate)
             distance_errors.append(matched_distances)
-            median_distance_errors.append(np.median(matched_distances))
-        return heights, avg_count_error_rates, median_distance_errors, distance_errors
+            signed_distance_errors.append(signed_matched_distances)
+        return heights, avg_count_error_rates, distance_errors, signed_distance_errors
     
     def pulse_transit_time(self, peaks_list_1, peaks_list_2, min_dist: int, max_dist: int):
         ptts_list = []
@@ -150,7 +154,7 @@ class PulseEval():
         pred_peaks_sites = []
         
         for i in range(num_sites):
-            target_peaks_list, matched_peaks_list, _, _ = self.peak_detection(target_np[:, i, :], pred_np[:, i, :], peak_min_height=height_thrs[i])
+            target_peaks_list, matched_peaks_list, _ = self.peak_detection(target_np[:, i, :], pred_np[:, i, :], peak_min_height=height_thrs[i])
             target_peaks_sites.append(target_peaks_list)
             pred_peaks_sites.append(matched_peaks_list) # have none
         

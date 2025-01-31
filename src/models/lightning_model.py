@@ -54,7 +54,7 @@ class LitModel(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x = batch[0]
         y = batch[1]
-
+        fnames = batch[2]
         y_hat = self(x)
         
         # x_cpu = x.detach().cpu().numpy()
@@ -71,20 +71,28 @@ class LitModel(pl.LightningModule):
         loss, loss_components = self.criterion(y_hat, y)
         if self.debug:
             # peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.45], debug_fnames=batch[2])
-            self.evaluation.peak_error(y_hat, y, heights=[0.45], debug_fnames=batch[2])
-        
+            _, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat, y, heights=[0.45], debug_fnames=fnames)
+            assert np.unique(fnames).shape[0] == 1, 'Multiple users in the batch'
+            print(f"fname: {fnames[0]}, count_error: {count_errors[0]}, median_distance: {np.median(signed_all_distance_errors)}, median_abs_distance: {np.median(np.abs(signed_all_distance_errors))}")
+            self.debug_metrics.append({
+                'fname': fnames[0],
+                'count_error': count_errors[0],
+                'median_distance': np.median(signed_all_distance_errors),
+                'median_abs_distance': np.median(np.abs(signed_all_distance_errors))
+            })
+            
         # heights, count_errors, distance_errors, all_distance_errors = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance)
-        heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat, y)
+        heights, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat, y)
         
         if self.thrs is None:
             self.thrs = heights
             self.distance_errs_at_thrs = [[] for _ in range(len(heights))]
             self.count_errs_at_thrs = [[] for _ in range(len(heights))]
 
-        for id, (height, count_error, distance_error) in enumerate(zip(heights, count_errors, distance_errors)):
+        for id, (height, count_error, distance_errors) in enumerate(zip(heights, count_errors, all_distance_errors)):
             result_dict = {
                 'count_error_{:.2f}'.format(height): count_error,
-                'distance_error_{:.2f}'.format(height): distance_error
+                'distance_error_{:.2f}'.format(height): np.median(distance_errors)
             }
             self.log_dict(result_dict, on_step=True, on_epoch=True)
             
@@ -134,6 +142,8 @@ class LitModel(pl.LightningModule):
         self.thrs = None
         self.distance_errs_at_thrs = None
         self.count_errs_at_thrs = None
+        # Initialize list to store debug metrics
+        self.debug_metrics = []
     
     def on_test_epoch_end(self):
         for i in range(len(self.thrs)):

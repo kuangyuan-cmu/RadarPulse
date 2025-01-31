@@ -10,7 +10,7 @@ data:
   norm_2d: false
 
 training:
-  batch_size: 64
+  batch_size: 51
   num_workers: 8
   learning_rate: 0.001
   max_epochs: 30

@@ -30,9 +30,9 @@ class LitModel_joint(pl.LightningModule):
         
         # (site_1, site_2, min_distance, max_distance)
         self.ptt_queries = [ 
-            # (1, 2, -100, -50),
+            (1, 2, -100, -50),
             # (0, 2, -105, -35)
-            (1, 3, -22, 2)
+            # (1, 3, -45, 2)
         ]
 
     def forward(self, x):
@@ -64,9 +64,9 @@ class LitModel_joint(pl.LightningModule):
             y_hat_site = y_hat[:, i, :, :]
             y_site = y[:, i, :, :]
             # _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5])
-            _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.5])
+            _, count_error, distance_errors, signed_distance_errors = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.5])
             self.log(f'val_count_error_{self.sites_names[i]}', count_error[0], prog_bar=True)
-            self.log(f'val_distance_error_{self.sites_names[i]}', distance_error[0], prog_bar=True)
+            self.log(f'val_distance_error_{self.sites_names[i]}', np.median(distance_errors[0]), prog_bar=True)
             
         return loss
     
@@ -86,17 +86,17 @@ class LitModel_joint(pl.LightningModule):
             # if i == 0:
             #     _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.6], debug_fnames=batch[2])
             
-            heights, count_errors, distance_errors, all_distance_errors = self.evaluation.peak_error(y_hat_site, y_site)
+            heights, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat_site, y_site)
             if len(self.distance_errs_at_thrs[self.sites_names[i]]) == 0:
                 self.thrs = heights
                 self.distance_errs_at_thrs[self.sites_names[i]] = [[] for _ in range(len(heights))]
                 self.count_errs_at_thrs[self.sites_names[i]] = [[] for _ in range(len(heights))]
-            for id, (height, count_error, distance_error) in enumerate(zip(heights, count_errors, distance_errors)):
-                self.distance_errs_at_thrs[self.sites_names[i]][id].extend(all_distance_errors[id])
+            for id, (height, count_error, distance_errors) in enumerate(zip(heights, count_errors, all_distance_errors)):
+                self.distance_errs_at_thrs[self.sites_names[i]][id].extend(distance_errors)
                 self.count_errs_at_thrs[self.sites_names[i]][id].append(count_error)
                 result_dict = {
                     f'{self.sites_names[i]}_count_error_{height:.2f}': count_error,
-                    f'{self.sites_names[i]}_distance_error_{height:.2f}': distance_error
+                    f'{self.sites_names[i]}_distance_error_{height:.2f}': np.median(distance_errors)
                     
                 }
                 self.log_dict(result_dict, on_step=True, on_epoch=True)
@@ -105,7 +105,7 @@ class LitModel_joint(pl.LightningModule):
             bname = names[0]
             print(bname)
             
-        ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.86, 0.64, 0.6])
+        ptt_metrics, ptt_samples = self.evaluation.ptt_error(y_hat, y, ptt_queries=self.ptt_queries, height_thrs=[0.68, 0.3, 0.19, 0.6])
         
         gt_ptt = ptt_samples[0]['gt_ptt']
         pred_ptt = ptt_samples[0]['pred_ptt']
@@ -114,7 +114,8 @@ class LitModel_joint(pl.LightningModule):
         plt.plot(pred_ptt, label='pred_ptt')
         plt.ylim(self.ptt_queries[0][2], self.ptt_queries[0][3])
         plt.legend()
-        plt.savefig(f'results/ptt_figures/{bname}_ptt_heart2neck.png')
+        plt.savefig(f'results/ptt_figures/{bname}_ptt_heart2wrist.png')
+        # plt.show()
         plt.close()
         
         for ptt_metric in ptt_metrics:

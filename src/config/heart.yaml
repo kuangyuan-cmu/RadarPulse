@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/kuangzj_bptest_0128/"
+  data_path: "dataset/ultragood_v2_0123/"
   position: "heart"
   signal_type: "both"
   fs: 500  # sampling frequency
@@ -10,7 +10,7 @@ data:
   norm_2d: false
 
 training:
-  batch_size: 64
+  batch_size: 51
   num_workers: 8
   learning_rate: 0.001
   max_epochs: 30
