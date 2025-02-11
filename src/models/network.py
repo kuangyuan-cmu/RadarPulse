@@ -7,101 +7,47 @@ from typing import List
 import numpy as np
 
 class SpatialReductionPreprocessing(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, dual_type: bool):
+    def __init__(self, out_channels: int):
         """
         Args:
             in_channels: Number of input spatial points
             out_channels: Desired number of output spatial points
         """
         super().__init__()
-        self.in_channels = in_channels
         self.out_channels = out_channels
-        self.dual_type = dual_type
-        if dual_type:
-            self.spatial_temporal_processing_type1 = nn.Sequential(
-                # Reshape input to 2D format implicitly in forward pass
-                nn.Conv2d(
-                    in_channels=1,  # Single channel input after reshape
-                    out_channels=16,  # Intermediate feature maps
-                    kernel_size=(1, 7),  # (spatial, temporal) kernel
-                    padding=(0, 3),  # Same padding to maintain temporal dimension
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-                # Second conv for feature processing
-                nn.Conv2d(
-                    in_channels=16,
-                    out_channels=16,
-                    kernel_size=(1, 7),
-                    padding=(0, 3),
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-            )
-            self.spatial_temporal_processing_type2 = nn.Sequential(
-                # Reshape input to 2D format implicitly in forward pass
-                nn.Conv2d(
-                    in_channels=1,  # Single channel input after reshape
-                    out_channels=16,  # Intermediate feature maps
-                    kernel_size=(1, 7),  # (spatial, temporal) kernel
-                    padding=(0, 3),  # Same padding to maintain temporal dimension
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-                # Second conv for feature processing
-                nn.Conv2d(
-                    in_channels=16,
-                    out_channels=16,
-                    kernel_size=(1, 7),
-                    padding=(0, 3),
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-            )
-        else:
-            self.spatial_temporal_processing = nn.Sequential(
-                # Reshape input to 2D format implicitly in forward pass
-                nn.Conv2d(
-                    in_channels=1,  # Single channel input after reshape
-                    out_channels=16,  # Intermediate feature maps
-                    kernel_size=(1, 7),  # (spatial, temporal) kernel
-                    padding=(0, 3),  # Same padding to maintain temporal dimension
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-                # Second conv for feature processing
-                nn.Conv2d(
-                    in_channels=16,
-                    out_channels=16,
-                    kernel_size=(1, 7),
-                    padding=(0, 3),
-                    stride=1
-                ),
-                nn.BatchNorm2d(16),
-                nn.ReLU(),
-            )
+        self.spatial_temporal_processing = nn.Sequential(
+            # Reshape input to 2D format implicitly in forward pass
+            nn.Conv2d(
+                in_channels=1,  # Single channel input after reshape
+                out_channels=16,  # Intermediate feature maps
+                kernel_size=(1, 7),  # (spatial, temporal) kernel
+                padding=(0, 3),  # Same padding to maintain temporal dimension
+                stride=1
+            ),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            # Second conv for feature processing
+            nn.Conv2d(
+                in_channels=16,
+                out_channels=16,
+                kernel_size=(1, 7),
+                padding=(0, 3),
+                stride=1
+            ),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+        )
             
         # Final 1x1 conv to get exact channel count
+        # self.channel_adjust = nn.Conv2d(16, 1, kernel_size=(1, 7), padding=(0, 3), stride=1)
         self.channel_adjust = nn.Conv2d(16, 1, kernel_size=1)
-        
     def forward(self, x):
         # x shape: (batch, spatial, temporal)
         batch, spatial, temporal = x.shape
-        
         # Add channel dimension for 2D CNN
         x = x.unsqueeze(1)  # (batch, 1, spatial, temporal)
 
-        if self.dual_type:
-            x1 = self.spatial_temporal_processing_type1(x[:,:,:spatial//2,:])
-            x2 = self.spatial_temporal_processing_type2(x[:,:,spatial//2:,:])
-            x = torch.cat([x1, x2], dim=2)
-        else:
-            x = self.spatial_temporal_processing(x)  # (batch, 16, spatial, temporal)
+        x = self.spatial_temporal_processing(x)  # (batch, 16, spatial, temporal)
             
         x = torch.topk(x, self.out_channels, dim=2)[0]  # (batch, 16, reduce_spatial, temporal)
         
@@ -151,9 +97,8 @@ class DecoderBlock(nn.Module):
     
 class PulseDetectionNet(nn.Module):
     def __init__(self, 
-                 in_channels: int,
                  seq_len: int,
-                 dual_type: bool = False,
+                 in_channels: int, # not used
                  reduce_channels: int = 8,
                  hidden_channels: List[int] = [32, 64, 128],
                  kernel_size: int = 7,
@@ -166,7 +111,7 @@ class PulseDetectionNet(nn.Module):
         self.seq_len = seq_len
         self.use_lstm = use_lstm
         
-        self.spatial_processing = SpatialReductionPreprocessing(in_channels, reduce_channels, dual_type)
+        self.spatial_processing = SpatialReductionPreprocessing(reduce_channels)
         current_channels = reduce_channels
         # current_channels = in_channels
         
@@ -282,7 +227,7 @@ class PulseDetectionNet(nn.Module):
 if __name__ == '__main__':
     # Test network
     torch.manual_seed(0)
-    net = PulseDetectionNet(in_channels=40, seq_len=5000)
+    net = PulseDetectionNet(seq_len=5000)
     # model summary
     info = summary(net, input_size=(16, 5000, 40), device='cpu')
     

@@ -7,7 +7,7 @@ from config.config_utils import load_config, combine_configs
 import torch
 import argparse
 
-def train(configs, checkpoint_paths, joint_model_checkpoint_path=None):
+def train(configs, checkpoint_paths, joint_model_checkpoint_path=None, leave_out_users=None):
     config_default = load_config('src/config', 'joint')
     pl.seed_everything(configs[0].training.seed, workers=True)
     # Initialize data module
@@ -16,6 +16,7 @@ def train(configs, checkpoint_paths, joint_model_checkpoint_path=None):
         data_config=[config.data for config in configs],
         batch_size=config_default.training.batch_size,
         num_workers=config_default.training.num_workers,   
+        leave_out_users=leave_out_users
     )
     # data_module.setup()
     if not any(checkpoint_paths):
@@ -26,7 +27,9 @@ def train(configs, checkpoint_paths, joint_model_checkpoint_path=None):
         print(f'Loaded joint model from {joint_model_checkpoint_path}')
     
     # Initialize trainer
-    exp_name = f"{config_default.data.data_path}Joint-reversebottleneck"
+    exp_name = f"{config_default.data.data_path}Joint"
+    if leave_out_users:
+        exp_name += f"_leave_out_{leave_out_users}"
     
     loss_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
@@ -71,6 +74,7 @@ def main():
     
     parser.add_argument('--joint-model-checkpoint', type=str, help='Path to config file for wrist model')
     
+    parser.add_argument('--leave_out_users', type=str, help='Leave out users')
     args = parser.parse_args()
 
     checkpoints = [args.head_checkpoint, args.heart_checkpoint, args.wrist_checkpoint, args.neck_checkpoint]
@@ -82,8 +86,17 @@ def main():
         load_config('src/config', env=args.neck_model_config)
     ]
         
-    train(configs, checkpoints, args.joint_model_checkpoint)
+    train(configs, checkpoints, args.joint_model_checkpoint, args.leave_out_users)
     
 if __name__ == '__main__':
     main()
-    
+
+"""
+Command to call:
+python src/train_joint.py \
+    --head-checkpoint checkpoints/dataset/ultragood_v4/new/head-phase_leave_out_kuang,biran-loss-epoch=26-val_loss=0.19.ckpt \
+    --heart-checkpoint checkpoints/dataset/ultragood_v4/new/heart-both_leave_out_kuang,biran-loss-epoch=23-val_loss=0.12.ckpt \
+    --wrist-checkpoint checkpoints/dataset/ultragood_v4/new/wrist-both_leave_out_kuang,biran-loss-epoch=24-val_loss=0.22.ckpt \
+    --neck-checkpoint checkpoints/dataset/ultragood_v4/new/neck-both_leave_out_kuang,biran-loss-epoch=34-val_loss=0.14.ckpt \
+    --leave_out_users biran,kuang
+"""

@@ -28,9 +28,11 @@ def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
     # Run test
     trainer.test(model, datamodule=data_module, ckpt_path=checkpoint_path)
     
+    if exp_name is None and leave_out_users is not None:
+        exp_name = f'{leave_out_users}_{config.data.position}'
     if exp_name:
-        np.save(f'results/{exp_name}.npy', model.results, allow_pickle=True)
-        pd.DataFrame(model.debug_metrics).to_csv(f'results/{exp_name}_debug.csv', index=False)
+        # np.save(f'results/{exp_name}.npy', model.results, allow_pickle=True)
+        pd.DataFrame(model.debug_metrics).to_csv(f'results/{exp_name}.csv', index=False)
    
 def main():
     parser = argparse.ArgumentParser()

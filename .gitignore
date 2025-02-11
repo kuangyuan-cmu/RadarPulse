@@ -7,3 +7,5 @@ dev.ipynb
 results
 **/__pycache__/
 .vscode
+*.xlsx
+*.txt

@@ -1,5 +1,5 @@
 data:
-  data_path: "dataset/ultragood_v2_0123/"
+  data_path: "dataset/ultragood_v5/"
   position: "neck"
   signal_type: "both"
   fs: 500  # sampling frequency
@@ -7,13 +7,14 @@ data:
   overlap: 0.8
   intra_session_split_ratio: 0.8
   n_channels: 42
+  augment_channels: 35
   norm_2d: false
 
 training:
-  batch_size: 51
-  num_workers: 8
+  batch_size: 128
+  num_workers: 5
   learning_rate: 0.001
-  max_epochs: 30
+  max_epochs: 60
   weight_decay: 0.0001
   seed: 42
 
@@ -26,7 +27,6 @@ scheduler:
 network:
   seq_len: 5000  # same as data.sample_len
   in_channels: 42
-  dual_type: false
   reduce_channels: 8
   hidden_channels: [32, 64, 128]
   kernel_size: 7

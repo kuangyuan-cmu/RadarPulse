@@ -175,11 +175,12 @@ def main_v2(dataset_path):
             # Only process if we have GT files
             for gt_file in gt_files:
                 exp_name = gt_file.name[3:].split('.')[0]
+                print("Exp Name:", exp_name)
                 processed_file = user_path / f'{exp_name}.npz'
                 
                 if processed_file.exists():
                     continue
-                    
+
                 # Load data for each available site
                 data_len = None
                 for site in sites:
@@ -217,7 +218,7 @@ def main_v2(dataset_path):
                 
                 sampled_data = sliding_window_sampling(data, label, sample_len, overlap)
                 
-                print("Exp Name:", exp_name, "Samples:", len(sampled_data[f'{list(data.keys())[0]}_data']))
+                print("Samples:", len(sampled_data[f'{list(data.keys())[0]}_data']))
 
                 # Save and clear data
                 np.savez(processed_file, **sampled_data)

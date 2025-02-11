@@ -30,7 +30,7 @@ def train(config, checkpoint_path=None, exp_name=None, leave_out_users=None):
     
     loss_checkpoint_callback = ModelCheckpoint(
         dirpath='checkpoints',
-        filename= exp_name + '-loss-{epoch:02d}-{val_loss:.2f}',
+        filename= exp_name + '-loss-{epoch:02d}-{val_loss:.3f}',
         save_top_k=2,  # Save top 3 models
         monitor='val_loss',
         mode='min',

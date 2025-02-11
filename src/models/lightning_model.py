@@ -17,7 +17,7 @@ class LitModel(pl.LightningModule):
             **self.config.network
         )
         self.criterion = PulseLoss(**self.config.loss)
-        self.evaluation = PulseEval(peak_min_distance=self.config.loss.min_peak_distance)
+        self.evaluation = PulseEval(peak_min_distance=self.config.loss.min_peak_distance, site=self.config.data.position)
         self.results = None
 
     def forward(self, x):
@@ -46,9 +46,10 @@ class LitModel(pl.LightningModule):
             self.log(f'val_{name}', value)
         
         # _, count_error, distance_error, _ = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.5])
-        _, count_error, distance_error, _ = self.evaluation.peak_error(y_hat, y, heights=[0.5])
+        _, count_error, all_distance_error, signed_all_distance_error = self.evaluation.peak_error(y_hat, y, heights=[0.5])
         self.log('val_count_error', count_error[0], prog_bar=True)
-        self.log('val_distance_error', distance_error[0], prog_bar=True)
+        self.log('val_distance_error', np.median(all_distance_error[0]), prog_bar=True)
+        self.log('val_signed_distance_error', np.median(signed_all_distance_error[0]), prog_bar=True)
         return loss
     
     def test_step(self, batch, batch_idx):
@@ -69,21 +70,10 @@ class LitModel(pl.LightningModule):
         # plt.plot((y_cpu[nsig,:,0]-0.5)/100)
         
         loss, loss_components = self.criterion(y_hat, y)
-        if self.debug:
-            # peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance, heights=[0.45], debug_fnames=batch[2])
-            _, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat, y, heights=[0.45], debug_fnames=fnames)
-            assert np.unique(fnames).shape[0] == 1, 'Multiple users in the batch'
-            print(f"fname: {fnames[0]}, count_error: {count_errors[0]}, median_distance: {np.median(signed_all_distance_errors)}, median_abs_distance: {np.median(np.abs(signed_all_distance_errors))}")
-            self.debug_metrics.append({
-                'fname': fnames[0],
-                'count_error': count_errors[0],
-                'median_distance': np.median(signed_all_distance_errors),
-                'median_abs_distance': np.median(np.abs(signed_all_distance_errors))
-            })
+        for name, value in loss_components.items():
+            self.log(f'test_{name}', value)
             
-        # heights, count_errors, distance_errors, all_distance_errors = peak_error(y_hat, y, peak_min_distance=self.config.loss.min_peak_distance)
         heights, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat, y)
-        
         if self.thrs is None:
             self.thrs = heights
             self.distance_errs_at_thrs = [[] for _ in range(len(heights))]
@@ -99,18 +89,25 @@ class LitModel(pl.LightningModule):
             self.distance_errs_at_thrs[id].extend(all_distance_errors[id])
             self.count_errs_at_thrs[id].append(count_error)
         
-        # id = np.argmin(np.abs(np.array(count_errors) - self.config.eval.count_err_thr))
-        # print(id, heights[id], count_errors[id], distance_errors[id])
-        # result_dict = {
-        #     'test_loss': loss,
-        #     'heights': heights,
-        #     'test_count_error': count_errors,
-        #     'test_distance_error': distance_errors
-        # }
-        # self.log_dict(result_dict, on_step=True, on_epoch=True, prog_bar=True)
-        
-        for name, value in loss_components.items():
-            self.log(f'test_{name}', value)
+        if self.debug:
+            # Get unique filenames and their indices
+            unique_fnames, unique_indices = np.unique(fnames, return_index=True)
+
+            for i, fname in enumerate(unique_fnames):
+                fname_mask = np.array(np.where(np.array(fnames) == fname)[0], dtype=int)
+                # print(fname_mask.shape, y_hat[fname_mask,:,:].shape, y[fname_mask,:,:].shape)
+                _, count_errors, all_distance_errors, signed_all_distance_errors = self.evaluation.peak_error(y_hat[fname_mask,:,:], y[fname_mask,:,:], heights=[0.45])
+                
+                if fname not in self.debug_metrics:
+                    self.debug_metrics[fname] = {
+                        'count_error': [],
+                        'median_distance': [],
+                        'median_abs_distance': []
+                    }
+                self.debug_metrics[fname]['count_error'].append(count_errors[0])
+                self.debug_metrics[fname]['median_distance'].extend(signed_all_distance_errors[0])
+                self.debug_metrics[fname]['median_abs_distance'].extend(np.abs(signed_all_distance_errors[0]))
+                
             
         return result_dict
     
@@ -142,8 +139,8 @@ class LitModel(pl.LightningModule):
         self.thrs = None
         self.distance_errs_at_thrs = None
         self.count_errs_at_thrs = None
-        # Initialize list to store debug metrics
-        self.debug_metrics = []
+        # Initialize dict to store debug metrics per filename
+        self.debug_metrics = {}
     
     def on_test_epoch_end(self):
         for i in range(len(self.thrs)):
@@ -154,10 +151,17 @@ class LitModel(pl.LightningModule):
         count_errs_at_thrs = np.array(self.count_errs_at_thrs, dtype=object)
         thrs = np.array(self.thrs)
         
+        # Aggregate debug metrics per filename
+        if self.debug:
+            for fname in self.debug_metrics:
+                self.debug_metrics[fname]['count_error'] = np.mean(self.debug_metrics[fname]['count_error'])
+                self.debug_metrics[fname]['median_distance'] = np.median(self.debug_metrics[fname]['median_distance'])
+                self.debug_metrics[fname]['median_abs_distance'] = np.median(self.debug_metrics[fname]['median_abs_distance'])
+        self.debug_metrics = [{'fname': fname, **metrics} for fname, metrics in self.debug_metrics.items()]
+        
         self.results =  {
             'thrs': thrs,
             'distance_errs_at_thrs': distance_errs_at_thrs,
             'count_errs_at_thrs': count_errs_at_thrs
         }
-    
     

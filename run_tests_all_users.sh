@@ -1,7 +1,24 @@
 #!/bin/bash
 
+#SBATCH -p GPU-small
+#SBATCH -N 1
+#SBATCH -t 0:45:00
+#SBATCH --cpus-per-gpu 5
+#SBATCH --gpus=v100-32:1
+
+
 # Find all checkpoint files
-for ckpt in checkpoints/dataset/ultragood_v2_0123_psc/head/*.ckpt; do
+dataset=$1
+site=$2
+
+if [ -z "$dataset" ] || [ -z "$site" ]; then
+    echo "Usage: $0 <dataset> <site>"
+    echo "Example: $0 ultragood_v5 head"
+    exit 1
+fi
+
+module load anaconda3
+for ckpt in checkpoints/dataset/${dataset}/${site}/*.ckpt; do
     # Extract the checkpoint name without path and extension
     ckpt_name=$(basename "$ckpt" .ckpt)
     
@@ -14,9 +31,9 @@ for ckpt in checkpoints/dataset/ultragood_v2_0123_psc/head/*.ckpt; do
     # Run the test script with the extracted user name
     python src/test.py \
         --checkpoint "$ckpt" \
-        --config head \
-        --name "results_${ckpt_name}" \
+        --config ${site} \
         --leave_out_users "$user_name" \
-        --debug \
-        --name "head_${user_name}"
-done 
+        --debug
+done
+
+###sbatch -o ./logs/testing_neck.log run_tests_all_users.sh

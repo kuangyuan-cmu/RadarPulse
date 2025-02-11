@@ -1,19 +1,20 @@
 data:
-  data_path: "dataset/ultragood_v2_0123/"
+  data_path: "dataset/ultragood_v5/"
   position: "head"
   signal_type: "phase"
   fs: 500  # sampling frequency
   sample_len: 5000      # 10 * fs = 10 * 500
   overlap: 0.8
   intra_session_split_ratio: 0.8
-  n_channels: 21
+  n_channels: 105
+  augment_channels: 75
   norm_2d: false
 
 training:
-  batch_size: 51
-  num_workers: 8
+  batch_size: 128
+  num_workers: 5
   learning_rate: 0.001
-  max_epochs: 30
+  max_epochs: 40
   weight_decay: 0.01
   seed: 42
 
@@ -25,9 +26,8 @@ scheduler:
 
 network:
   seq_len: 5000  # same as data.sample_len
-  in_channels: 21
-  dual_type: false
-  reduce_channels: 8
+  in_channels: 105 # only for joint model
+  reduce_channels: 16
   hidden_channels: [32, 64, 128]
   kernel_size: 7
   use_lstm: true

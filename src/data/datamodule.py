@@ -42,12 +42,13 @@ class PulseDataModule(pl.LightningDataModule):
                 self.train_dataset = PulseDataset(
                     f"{self.data_path}",
                     self.data_config,
-                    exclude_users=self.leave_out_users
+                    exclude_users=self.leave_out_users,
+                    enable_augment=True
                 )
                 self.val_dataset = PulseDataset(
                     f"{self.data_path}",
                     self.data_config,
-                    include_users=self.leave_out_users
+                    include_users=self.leave_out_users,
                 )
             if stage == 'validate':
                 self.val_dataset = PulseDataset(

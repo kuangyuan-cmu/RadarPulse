@@ -78,8 +78,8 @@ def main():
     
     # Train one model for each left-out user
     best_models = {}
-    for user in users:
-        print(f"\nTraining model leaving out user: {user}")
+    for i, user in enumerate(users):
+        print(f"\nTraining model leaving out user: {user} ({i+1}/{len(users)})")
         best_model_path = train_single_fold(config, user, args.expname)
         best_models[user] = best_model_path
     
