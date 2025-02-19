@@ -14,7 +14,7 @@ training:
   batch_size: 128
   num_workers: 5
   learning_rate: 0.001
-  max_epochs: 60
+  max_epochs: 50
   weight_decay: 0.0001
   seed: 42
 

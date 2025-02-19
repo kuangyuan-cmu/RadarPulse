@@ -3,7 +3,7 @@ import torch
 import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from .network_joint import MultiSitePulseDetectionNet
-from .loss import MultiSitePulseLoss
+from .loss import MultiSitePulseLoss, DirectPTTRegressionLoss
 from .eval_metrics import PulseEval
 import matplotlib.pyplot as plt
 from scipy import stats
@@ -23,8 +23,10 @@ class LitModel_joint(pl.LightningModule):
         
         self.network_configs = [config.network for config in config_list]
         self.loss_configs = [config.loss for config in config_list]
-        self.model = MultiSitePulseDetectionNet(self.network_configs, enable_fusion=enable_fusion)
-        self.criterion = MultiSitePulseLoss(self.loss_configs, names=self.sites_names)
+        self.pairs = [(1,2), (1,3), (2,3), (0,1), (0,2)]
+        self.model = MultiSitePulseDetectionNet(self.network_configs, enable_fusion=enable_fusion, direct_ptt=True, pairs=self.pairs)
+        # self.criterion = MultiSitePulseLoss(self.loss_configs, names=self.sites_names)
+        self.criterion = DirectPTTRegressionLoss(pairs=self.pairs)
         self.evaluation = PulseEval(peak_min_distance=self.loss_configs[0].min_peak_distance)
         
         if checkpoint_paths is not None:
@@ -37,15 +39,25 @@ class LitModel_joint(pl.LightningModule):
             (1, 2, -95, -40),
             (1, 3, -50, 10),
             (2, 3, 10, 80),
-            
-            (0, 1, 5, 55),
-            # (0, 1, -100, 100),
-            (0, 2, -75, -20),
-            
-            (0, 3, -10, 40) # almost constant
+
+            # (1, 2, -105, -30),
+            # (1, 3, -45, 15),
+            # (2, 3, 20, 90),
+
+            (0, 1, 5, 65),
+            # (0, 1, 0, 100),
+            (0, 2, -60, -5),
+            # (0, 2, -60, 20),
+            (0, 3, 0, 45),
+            # (0, 3, -10, 80),
+
+            # for david and bill
+            # (0, 1, 5, 100),
+            # (0, 2, -75, 20),
+            # (0, 3, -10, 100)
         ]
-        # self.height_thrs = [0.35, 0.55, 0.25, 0.5]
-        self.height_thrs = [0.55, 0.8, 0.65, 0.65]
+        self.height_thrs = [0.35, 0.55, 0.25, 0.5]
+        # self.height_thrs = [0.55, 0.8, 0.65, 0.65]
         
         # self.height_thrs = [0.25, 0.5, 0.5, 0.5]
         # self.height_thrs = [0.6, 0.80, 0.68, 0.70]
@@ -76,13 +88,13 @@ class LitModel_joint(pl.LightningModule):
         for name, value in loss_components.items():
             self.log(f'val_{name}', value)
         
-        for i in range(self.num_sites):
-            y_hat_site = y_hat[:, i, :, :]
-            y_site = y[:, i, :, :]
-            # _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5])
-            _, count_error, distance_errors, signed_distance_errors = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.5])
-            self.log(f'val_count_error_{self.sites_names[i]}', count_error[0], prog_bar=True)
-            self.log(f'val_distance_error_{self.sites_names[i]}', np.median(distance_errors[0]), prog_bar=True)
+        # for i in range(self.num_sites):
+        #     y_hat_site = y_hat[:, i, :, :]
+        #     y_site = y[:, i, :, :]
+        #     # _, count_error, distance_error, _ = peak_error(y_hat_site, y_site, peak_min_distance=self.loss_configs[0].min_peak_distance, heights=[0.5])
+        #     _, count_error, distance_errors, signed_distance_errors = self.evaluation.peak_error(y_hat_site, y_site, heights=[0.5])
+        #     self.log(f'val_count_error_{self.sites_names[i]}', count_error[0], prog_bar=True)
+        #     self.log(f'val_distance_error_{self.sites_names[i]}', np.median(distance_errors[0]), prog_bar=True)
             
         return loss
     
@@ -290,5 +302,21 @@ class LitModel_joint(pl.LightningModule):
 
         with open(f'results/ptt_figures/{self.username}_eval_metrics.json', 'w') as f:
             json.dump(eval_metrics, f)
+
+        data = {
+            'sys': sys,
+            'dia': dia,
+        }
+        # Add PTT data for each site pair
+        for i in range(len(self.ptt_queries)):
+            site1 = self.sites_names[self.ptt_queries[i][0]]
+            site2 = self.sites_names[self.ptt_queries[i][1]]
+            column_name = f'ptt_{site1}_{site2}'
+            data[f'{column_name}_gt'] = self.median_ptt_batch[i]['gt_ptt']
+            data[f'{column_name}_pred'] = self.median_ptt_batch[i]['pred_ptt']
+        
+        # Create and save DataFrame
+        df = pd.DataFrame(data)
+        df.to_csv(f'results/bp_eval/{self.username}_ptt_bp_data.csv', index=False)
         
         

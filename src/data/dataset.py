@@ -7,12 +7,14 @@ import LnkParse3
 
 
 class PulseDataset(Dataset):
-    def __init__(self, data_path, data_config, include_users=None, exclude_users=None, enable_augment=False):
+    def __init__(self, data_path, data_config, include_users=None, exclude_users=None, enable_augment=False, folder_level=1, testing=False, label_type='peak', pairs=None):
         super().__init__()
         self.data_path = Path(data_path)
         self.data_config = data_config
         self.include_users = include_users
         self.exclude_users = exclude_users
+        self.folder_level = folder_level
+        self.testing = testing
         self.is_joint = isinstance(self.data_config, list)
         
         if self.is_joint:
@@ -34,11 +36,18 @@ class PulseDataset(Dataset):
                 self.augment_channels = self.data_config.augment_channels
             else:
                 self.augment_channels = None
-            
+                
+        self.downsample_rate = 3
         self.data = []
         self.label = []
         self.file_name = []
         self._load_data()
+        
+        label_type = 'ptt'
+        if self.is_joint and label_type == 'ptt':
+            if pairs is None:
+                pairs = [(1,2), (1,3), (2,3), (0,1), (0,2)]
+            self.label = self.calculate_ptt(self.label, pairs=pairs)
         
     def _load_data(self):
         
@@ -46,11 +55,18 @@ class PulseDataset(Dataset):
             file_list = sorted(list(self.data_path.glob('*.npz*')), key=lambda x: int(x.stem.split('r')[-1]))
             
         else:
-            user_dirs = [d for d in self.data_path.glob('processed/*/') if d.is_dir()]
+            if self.folder_level == 1:
+                user_dirs = [d for d in self.data_path.glob('processed/*/') if d.is_dir()]
+            elif self.folder_level == 2:
+                user_dirs = [d for d in self.data_path.glob('processed/*/*/') if d.is_dir()]
+            else:
+                raise ValueError(f"Invalid folder level: {self.folder_level}")
+            
             if isinstance(self.include_users, str):
-                self.include_users = [self.include_users]
+                self.include_users = self.include_users.split(',')
             if isinstance(self.exclude_users, str):
-                self.exclude_users = [self.exclude_users]
+                self.exclude_users = self.exclude_users.split(',')
+            print(self.include_users, self.exclude_users)
             if self.include_users:
                 user_dirs = [d for d in user_dirs if d.name in self.include_users]
             if self.exclude_users:
@@ -60,7 +76,12 @@ class PulseDataset(Dataset):
                 raise FileNotFoundError(f"No valid user directories found in {self.data_path}")
             file_list = []
             for user_dir in user_dirs:
-                file_list.extend(list(user_dir.glob('*.npz*')))
+                if self.folder_level == 1:
+                    real_users_dirs = [d for d in user_dir.glob('*') if d.is_dir()]
+                    for real_user_dir in real_users_dirs:
+                        file_list.extend(list(real_user_dir.glob('*.npz*')))
+                elif self.folder_level == 2:
+                    file_list.extend(list(user_dir.glob('*.npz*')))
             file_list.sort(key=lambda x: int(x.stem.split('r')[-1]))
         
 
@@ -79,7 +100,11 @@ class PulseDataset(Dataset):
                 # load data only when all sites have data
                 if not all(f'{pos}_label' in loaded_data for pos in self.pulse_position):
                     continue
-                total_samples += loaded_data['heart_label'].shape[0]
+                # Calculate size after downsampling
+                sample_count = loaded_data['heart_label'].shape[0]
+                if not self.testing:
+                    sample_count = np.ceil(sample_count / self.downsample_rate).astype(int)
+                total_samples += sample_count
             else:
                 if f'{self.pulse_position}_label' not in loaded_data:
                     continue
@@ -125,6 +150,11 @@ class PulseDataset(Dataset):
                 # Load data and labels for each position
                 for i, pos in enumerate(self.pulse_position):
                     data = loaded_data[f'{pos}_data']
+                    label = loaded_data[f'{pos}_label']
+                    if not self.testing:
+                        data = data[::self.downsample_rate, ...]
+                        label = label[::self.downsample_rate, ...]
+                        
                     # if pos == 'head':
                         # data = data.sum(axis=2)
                         # data = data[:,:,1:-1]
@@ -138,7 +168,7 @@ class PulseDataset(Dataset):
                     # Store data and label directly in pre-allocated arrays
                     batch_size = data.shape[0]
                     self.data[i][current_idx:current_idx + batch_size] = torch.from_numpy(data)
-                    self.label[current_idx:current_idx + batch_size, i, :, :] = torch.from_numpy(loaded_data[f'{pos}_label'])
+                    self.label[current_idx:current_idx + batch_size, i, :, :] = torch.from_numpy(label)
                   
             else:
                 data_key = f'{self.pulse_position}_data'
@@ -198,6 +228,32 @@ class PulseDataset(Dataset):
             return np.concatenate((phase, mag), axis=-1)
         else:
             raise ValueError(f"Invalid signal type: {type}")
+    
+    def calculate_ptt(self, labels, pairs,thr=120):
+        # labels: (N, sites, L, 1)
+        N, num_sites, L, _ = labels.shape
+        num_pairs = len(pairs)
+        results = torch.zeros((N, num_pairs))
+
+        # For each sample
+        for n in range(N):
+            # For each pair of sites
+            for p, (i,j) in enumerate(pairs):
+                # Get peak indices for both sites
+                peaks_i = torch.where(labels[n,i,:,0] == 1)[0]
+                peaks_j = torch.where(labels[n,j,:,0] == 1)[0]
+                
+                if len(peaks_i) > 0 and len(peaks_j) > 0:
+                    # Calculate all PTTs using matrix subtraction
+                    # Reshape to allow broadcasting
+                    diff_matrix = peaks_j.reshape(-1,1) - peaks_i.reshape(1,-1)
+                    # Get valid PTTs (positive and below threshold)
+                    valid_ptts = diff_matrix[(diff_matrix > -thr) & (diff_matrix < thr)]
+                    
+                    if len(valid_ptts) > 0:
+                        results[n,p] = valid_ptts.float().median()
+
+        return results
         
     def __len__(self):
         return self.label.shape[0]

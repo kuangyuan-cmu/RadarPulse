@@ -64,86 +64,120 @@ class CrossSiteTemporalAttention(nn.Module):
         # Return list of tensors [(N, L, C), ...]
         return [output[:, i, :, :] for i in range(num_sites)]
 
+# New class for the PTT regression head.
+class PTTRegressionHead(nn.Module):
+    def __init__(self, in_features, hidden_features=64):
+        """
+        A simple MLP to regress a single scalar PTT value from concatenated features.
+        """
+        super().__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(in_features, hidden_features),
+            nn.ReLU(),
+            nn.BatchNorm1d(hidden_features), 
+            nn.Linear(hidden_features, 1)
+        )
+        
+    def forward(self, x):
+        return self.fc(x)
+
 class MultiSitePulseDetectionNet(nn.Module):
-    def __init__(self, site_configs, enable_fusion=True):
+    def __init__(self, site_configs, enable_fusion=True, direct_ptt=False, pairs=None):
+        """
+        Args:
+            site_configs: list of dictionaries for each site network.
+            enable_fusion: whether to use cross-site fusion.
+            direct_ptt: if True, directly output PTT regression values for every possible site pair.
+                        (Otherwise, use the original decoding branch for peak probability maps.)
+        """
         super().__init__()
         
         self.num_sites = len(site_configs)
         
-        # Create site-specific networks
+        # Create site-specific networks.
         self.site_networks = nn.ModuleList([
             PulseDetectionNet(**config) for config in site_configs
         ])
         
         self.site_in_channels = [config['in_channels'] for config in site_configs]
-        # Cross-site fusion
-        lstm_hidden_size = site_configs[0]['lstm_hidden_size'] * 2  # bidirectional
+        # Compute the fused feature dimension from bottleneck outputs (bidirectional LSTM).
+        lstm_hidden_size = site_configs[0]['lstm_hidden_size'] * 2
         
         self.enable_fusion = enable_fusion
-        if enable_fusion:
-            # self.cross_site_attention = CrossSiteAttention(
-            #     hidden_size=lstm_hidden_size
-            # )
+        self.direct_ptt = direct_ptt  # New flag to select regression mode.
+        
+        if self.enable_fusion:
             self.cross_site_attention = CrossSiteTemporalAttention(
                 hidden_size=lstm_hidden_size
             )
-        
+            
+        if self.direct_ptt:
+            if pairs is None:
+                # Automatically create all possible site pairs.
+                self.all_pairs = []
+                for i in range(self.num_sites):
+                    for j in range(i+1, self.num_sites):
+                        self.all_pairs.append((i, j))
+            else:
+                self.all_pairs = pairs
+            self.fused_feature_dim = lstm_hidden_size  # each site's fused feature dimension
+            
+            # Create a regression head for each site pair.
+            self.ptt_regression_heads = nn.ModuleDict()
+            for pair in self.all_pairs:
+                key = f'{pair[0]}_{pair[1]}'
+                self.ptt_regression_heads[key] = PTTRegressionHead(
+                    in_features=2 * self.fused_feature_dim, hidden_features=self.fused_feature_dim
+                )
+                
     def forward(self, site_inputs):
-        # size_inputs: cell
-        # Encode each site
+        """
+        Args:
+            site_inputs: A tensor with shape (N, num_sites, spatial, temporal)
+        """
+        # Encode each site's features.
         encoded_features = []
         skip_connections = []
         
         for i, network in enumerate(self.site_networks):
-            # Run encoder
+            # Each site input: (N, spatial, temporal) with spatial channels given by self.site_in_channels[i]
             feat, skip = network.encode(site_inputs[:, i, :, :self.site_in_channels[i]])
-            # feat, skip = network.encode(site_inputs[i])
-            # Run bottleneck
+            # Apply bottleneck processing (e.g. LSTM); output shape: (N, L, C)
             feat = network.bottleneck(feat)
             encoded_features.append(feat)
             skip_connections.append(skip)
             
-        # Cross-site fusion
+        # Cross-site fusion.
         if self.enable_fusion:
             fused_features = self.cross_site_attention(encoded_features)
         else:
             fused_features = encoded_features
         
-        # Decode each site
-        outputs = []
-        for i, network in enumerate(self.site_networks):
-            out = network.decode(fused_features[i], skip_connections[i])
-            outputs.append(out)
+        if self.direct_ptt:
+            # --- Direct PTT Regression branch ---
+            # Pool the fused features over time so that each site produces one feature vector.
+            pooled_features = [feat.mean(dim=1) for feat in fused_features]  # List of (N, C)
             
-        return torch.stack(outputs, dim=1) # (N, n_sites, L, C)
-    
-    # def forward(self, site_inputs):
-    #     # size_inputs: cell
-    #     # Encode each site
-    #     encoded_features = []
-    #     skip_connections = []
-        
-    #     for i, network in enumerate(self.site_networks):
-    #         # Run encoder
-    #         feat, skip = network.encode(site_inputs[:, i, :, :self.site_in_channels[i]])
-    #         encoded_features.append(feat.transpose(1, 2))
-    #         skip_connections.append(skip)
+            ptt_outputs = []
+            for pair in self.all_pairs:
+                key = f'{pair[0]}_{pair[1]}'
+                # Concatenate the two sites' pooled features: (N, 2*C)
+                reg_input = torch.cat([pooled_features[pair[0]], pooled_features[pair[1]]], dim=1)
+                # Regression head predicts one scalar PTT value for this pair.
+                ptt_value = self.ptt_regression_heads[key](reg_input)  # (N, 1)
+                ptt_outputs.append(ptt_value)
+            # Concatenate outputs along dimension 1 ==> (N, num_pairs) where each column is one PTT regression output.
+            return torch.cat(ptt_outputs, dim=1)
+        else:
+            # --- Original decoding branch (outputs temporal probability maps per site) ---
+            outputs = []
+            for i, network in enumerate(self.site_networks):
+                out = network.decode(fused_features[i], skip_connections[i])
+                outputs.append(out)
+            return torch.stack(outputs, dim=1)
+            # End of original branch.
             
-    #     # Cross-site fusion
-    #     fused_features = self.cross_site_attention(encoded_features)
-        
-    #     # LSTM 
-    #     for i, network in enumerate(self.site_networks):
-    #         fused_features[i] = network.bottleneck(fused_features[i].transpose(1, 2))
-            
-    #     # Decode each site
-    #     outputs = []
-    #     for i, network in enumerate(self.site_networks):
-    #         out = network.decode(fused_features[i], skip_connections[i])
-    #         outputs.append(out)
-            
-    #     return torch.stack(outputs, dim=1) # (N, n_sites, L, C)
-    
+    # The following are helper methods that remain unchanged.
     def load_pretrained(self, paths):
         for network, path in zip(self.site_networks, paths):
             state_dict = torch.load(path)['state_dict']
@@ -164,6 +198,7 @@ class MultiSitePulseDetectionNet(nn.Module):
         for i in range(self.num_sites):
             self.freeze_site(i)
 
+# Testing the direct regression branch:
 if __name__ == '__main__':
     in_channels = 21
     seq_len = 5000
@@ -185,11 +220,10 @@ if __name__ == '__main__':
             'lstm_hidden_size': lstm_hidden_size
         },
     ]
-
-    model = MultiSitePulseDetectionNet(site_configs, enable_fusion=True)
-    info = summary(model, input_size=(3,16, seq_len, in_channels), device='cpu')
-    # inputs = (torch.randn(16, seq_len, in_channels), torch.randn(16, seq_len, in_channels*2), torch.randn(16, seq_len, in_channels))
-    inputs = torch.randn(16, 3, seq_len, in_channels*2)
-
+    
+    # Set direct_ptt=True to use the regression branch.
+    model = MultiSitePulseDetectionNet(site_configs, enable_fusion=True, direct_ptt=True)
+    info = summary(model, input_size=(3, 16, seq_len, in_channels), device='cpu')
+    inputs = torch.randn(16, 3, seq_len, in_channels)
     outputs = model(inputs)
-    print(outputs.shape)
+    print("Output shape (N, num_pairs):", outputs.shape)

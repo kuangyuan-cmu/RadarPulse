@@ -60,7 +60,9 @@ class PulseDataModule(pl.LightningDataModule):
                 self.test_dataset = PulseDataset(
                     f"{self.data_path}",
                     self.data_config,
-                    include_users=self.leave_out_users
+                    include_users=self.leave_out_users,
+                    folder_level=2,
+                    testing=True
                 )
 
     def train_dataloader(self):

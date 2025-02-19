@@ -32,97 +32,6 @@ class PulseLoss(nn.Module):
                 
         return torch.clamp(gaussian_target, 0, 1)
 
-    # def peak_distance_loss(self, pred):
-    #     """Calculate loss based on distances between predicted peaks"""
-    #     batch_size = pred.shape[0]
-    #     device = pred.device
-    #     total_distance_loss = torch.tensor(0.0, device=device)
-        
-    #     # Soft peak detection
-    #     threshold = 0.5
-    #     kernel_size = 3
-        
-    #     for b in range(batch_size):
-    #         # Find local maxima
-    #         x = pred[b, :, 0]
-            
-    #         # Add dimensions for max_pool1d
-    #         x_expanded = x.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, seq_len)
-            
-    #         # Use max_pool1d to find local maxima
-    #         # padding='same' maintains input size
-    #         local_max_vals = F.max_pool1d(x_expanded, kernel_size=kernel_size, 
-    #                                     stride=1, padding=kernel_size//2)
-            
-    #         # Squeeze back to original dimensions
-    #         local_max_vals = local_max_vals.squeeze()
-            
-    #         # Find peaks
-    #         local_max = (x == local_max_vals) & (x > threshold)
-            
-    #         # Get peak positions
-    #         peak_positions = torch.where(local_max)[0]
-            
-    #         if len(peak_positions) > 1:
-    #             # Calculate distances between consecutive peaks
-    #             distances = peak_positions[1:] - peak_positions[:-1]
-                
-    #             # Penalty for distances outside acceptable range
-    #             distance_penalty = torch.where(
-    #                 distances < self.min_peak_distance,
-    #                 self.min_peak_distance - distances,
-    #                 torch.where(
-    #                     distances > self.max_peak_distance,
-    #                     distances - self.max_peak_distance,
-    #                     torch.zeros_like(distances)
-    #                 )
-    #             )
-                
-    #             total_distance_loss += distance_penalty.sum()
-        
-    #     return total_distance_loss / batch_size
-
-    # def peak_count_loss(self, pred, target):
-    #     """Calculate loss based on difference in peak counts"""
-    #     batch_size = pred.shape[0]
-    #     device = pred.device
-        
-    #     # Parameters for peak detection
-    #     threshold = 0.5
-    #     kernel_size = 3
-        
-    #     # Initialize tensor for predicted peak counts
-    #     pred_peak_counts = torch.zeros(batch_size, device=device)
-        
-    #     for b in range(batch_size):
-    #         # Get prediction for this batch
-    #         x = pred[b, :, 0]
-            
-    #         # Add dimensions for max_pool1d
-    #         x_expanded = x.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, seq_len)
-            
-    #         # Find local maxima using max_pool1d
-    #         local_max_vals = F.max_pool1d(x_expanded, kernel_size=kernel_size, 
-    #                                     stride=1, padding=kernel_size//2)
-            
-    #         # Squeeze back to original dimensions
-    #         local_max_vals = local_max_vals.squeeze()
-            
-    #         # A point is a peak if it's both:
-    #         # 1. A local maximum (equal to the max in its neighborhood)
-    #         # 2. Above threshold
-    #         peaks = (x == local_max_vals) & (x > threshold)
-            
-    #         # Count peaks for this batch
-    #         pred_peak_counts[b] = peaks.sum()
-        
-    #     # Calculate target peak counts
-    #     target_peak_counts = target.sum(dim=1).squeeze(-1)
-        
-    #     # Calculate absolute difference in counts
-    #     count_diff = torch.abs(pred_peak_counts - target_peak_counts)
-        
-        return count_diff.mean()
     
     def debug(self, preds, targets, names):
         # plot all of the preds and targets for a single batch
@@ -176,3 +85,26 @@ class MultiSitePulseLoss(nn.Module):
             for key, value in components.items():
                 loss_components[f'{name}_{key}'] = value
         return total_loss, loss_components
+
+# New loss module for direct PTT regression.
+class DirectPTTRegressionLoss(nn.Module):
+    def __init__(self, pairs):
+        super().__init__()
+        self.criterion = nn.MSELoss()
+        self.pairs = pairs
+    def forward(self, preds, targets):
+        """
+        Args:
+            preds: Tensor of shape (N, num_pairs) with predicted PTT values.
+            targets: Tensor of shape (N, num_pairs) with ground truth PTT values.
+        """
+        mse_loss = self.criterion(preds, targets)
+        
+        # Calculate MSE for each pair
+        pair_losses = {}
+        for i, pair in enumerate(self.pairs):
+            pair_name = f'mse_loss_{pair[0]}_{pair[1]}'
+            pair_loss = F.mse_loss(preds[:,i], targets[:,i])
+            pair_losses[pair_name] = pair_loss.item()
+            
+        return mse_loss, pair_losses

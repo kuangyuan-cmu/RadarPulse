@@ -94,9 +94,9 @@ if __name__ == '__main__':
 """
 Command to call:
 python src/train_joint.py \
-    --head-checkpoint checkpoints/dataset/ultragood_v4/new/head-phase_leave_out_kuang,biran-loss-epoch=26-val_loss=0.19.ckpt \
-    --heart-checkpoint checkpoints/dataset/ultragood_v4/new/heart-both_leave_out_kuang,biran-loss-epoch=23-val_loss=0.12.ckpt \
-    --wrist-checkpoint checkpoints/dataset/ultragood_v4/new/wrist-both_leave_out_kuang,biran-loss-epoch=24-val_loss=0.22.ckpt \
-    --neck-checkpoint checkpoints/dataset/ultragood_v4/new/neck-both_leave_out_kuang,biran-loss-epoch=34-val_loss=0.14.ckpt \
-    --leave_out_users biran,kuang
+    --head-checkpoint checkpoints/dataset/ultragood_v5/head-phase_leave_out_test1-loss-epoch=29-val_loss=0.191.ckpt \
+    --heart-checkpoint checkpoints/dataset/ultragood_v5/heart-both_leave_out_test1-loss-epoch=49-val_loss=0.132.ckpt \
+    --wrist-checkpoint checkpoints/dataset/ultragood_v5/wrist-both_leave_out_test1-loss-epoch=24-val_loss=0.186.ckpt \
+    --neck-checkpoint checkpoints/dataset/ultragood_v5/neck-both_leave_out_test1-loss-epoch=26-val_loss=0.154.ckpt \
+    --leave_out_users test1
 """
