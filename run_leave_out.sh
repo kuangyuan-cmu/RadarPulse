@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -p GPU-shared
+#SBATCH -p GPU-shared,GPU-small
 #SBATCH -N 1
 #SBATCH -t 1:30:00
 #SBATCH --cpus-per-gpu 5

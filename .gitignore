@@ -5,6 +5,7 @@ checkpoints
 ./config
 dev.ipynb
 results
+results_presubmission
 **/__pycache__/
 .vscode
 *.xlsx

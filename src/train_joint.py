@@ -77,14 +77,25 @@ def main():
     parser.add_argument('--leave_out_users', type=str, help='Leave out users')
     args = parser.parse_args()
 
-    checkpoints = [args.head_checkpoint, args.heart_checkpoint, args.wrist_checkpoint, args.neck_checkpoint]
-
-    configs = [
-        load_config('src/config', env=args.head_model_config),
-        load_config('src/config', env=args.heart_model_config),
-        load_config('src/config', env=args.wrist_model_config),
-        load_config('src/config', env=args.neck_model_config)
-    ]
+    checkpoints = []
+    configs = []
+    
+    # Only include checkpoints and configs for models that have checkpoints
+    if args.head_checkpoint:
+        checkpoints.append(args.head_checkpoint)
+        configs.append(load_config('src/config', env=args.head_model_config))
+        
+    if args.heart_checkpoint:
+        checkpoints.append(args.heart_checkpoint)
+        configs.append(load_config('src/config', env=args.heart_model_config))
+        
+    if args.wrist_checkpoint:
+        checkpoints.append(args.wrist_checkpoint)
+        configs.append(load_config('src/config', env=args.wrist_model_config))
+        
+    if args.neck_checkpoint:
+        checkpoints.append(args.neck_checkpoint)
+        configs.append(load_config('src/config', env=args.neck_model_config))
         
     train(configs, checkpoints, args.joint_model_checkpoint, args.leave_out_users)
     

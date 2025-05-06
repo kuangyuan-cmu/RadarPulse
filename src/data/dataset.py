@@ -43,8 +43,8 @@ class PulseDataset(Dataset):
         self.file_name = []
         self._load_data()
         
-        label_type = 'ptt'
         if self.is_joint and label_type == 'ptt':
+            print("Calculating PTT as label")
             if pairs is None:
                 pairs = [(1,2), (1,3), (2,3), (0,1), (0,2)]
             self.label = self.calculate_ptt(self.label, pairs=pairs)
@@ -61,17 +61,16 @@ class PulseDataset(Dataset):
                 user_dirs = [d for d in self.data_path.glob('processed/*/*/') if d.is_dir()]
             else:
                 raise ValueError(f"Invalid folder level: {self.folder_level}")
-            
             if isinstance(self.include_users, str):
                 self.include_users = self.include_users.split(',')
             if isinstance(self.exclude_users, str):
                 self.exclude_users = self.exclude_users.split(',')
             print(self.include_users, self.exclude_users)
+            
             if self.include_users:
                 user_dirs = [d for d in user_dirs if d.name in self.include_users]
             if self.exclude_users:
                 user_dirs = [d for d in user_dirs if d.name not in self.exclude_users]
-                
             if len(user_dirs) == 0:
                 raise FileNotFoundError(f"No valid user directories found in {self.data_path}")
             file_list = []
@@ -167,6 +166,7 @@ class PulseDataset(Dataset):
                     
                     # Store data and label directly in pre-allocated arrays
                     batch_size = data.shape[0]
+                    # print(data.shape, file_name)
                     self.data[i][current_idx:current_idx + batch_size] = torch.from_numpy(data)
                     self.label[current_idx:current_idx + batch_size, i, :, :] = torch.from_numpy(label)
                   
@@ -252,7 +252,6 @@ class PulseDataset(Dataset):
                     
                     if len(valid_ptts) > 0:
                         results[n,p] = valid_ptts.float().median()
-
         return results
         
     def __len__(self):
