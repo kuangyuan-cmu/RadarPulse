@@ -1,0 +1,6 @@
+data:
+  data_path: "dataset/rebuttal/more-elders/"
+
+training:
+  batch_size: 23
+  num_workers: 5

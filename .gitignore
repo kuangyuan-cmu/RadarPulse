@@ -9,5 +9,5 @@ results_presubmission
 **/__pycache__/
 .vscode
 *.xlsx
-*.txt
 paper_figures
+results_before_rebuttal

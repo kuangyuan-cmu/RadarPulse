@@ -30,6 +30,21 @@ fi
 
 module load anaconda3
 
+# Check if users file has any non-empty, non-comment lines
+user_count=0
+while IFS= read -r username; do
+    [[ -z "$username" || "$username" =~ ^#.*$ ]] && continue
+    ((user_count++))
+done < "$users_file"
+
+if [ $user_count -eq 0 ]; then
+    echo "Warning: No valid users found in '$users_file'"
+    echo "The file appears to be empty or contains only empty lines/comments"
+    exit 1
+fi
+
+echo "Found $user_count user(s) to process"
+
 # Process each user (assuming one username per line)
 while IFS= read -r username; do
     # Skip empty lines and lines starting with #

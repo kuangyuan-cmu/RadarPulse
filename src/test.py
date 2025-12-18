@@ -6,6 +6,7 @@ from config.config_utils import load_config
 import argparse
 import numpy as np
 import pandas as pd
+import os
 
 def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
     # Initialize data module
@@ -32,7 +33,8 @@ def test(config, checkpoint_path, exp_name, debug=False, leave_out_users=None):
         exp_name = f'{leave_out_users}_{config.data.position}'
     if exp_name:
         # np.save(f'results/{exp_name}.npy', model.results, allow_pickle=True)
-        pd.DataFrame(model.debug_metrics).to_csv(f'results/{exp_name}.csv', index=False)
+        os.makedirs(f'results/single_site_debug/{config.data.position}', exist_ok=True)
+        pd.DataFrame(model.debug_metrics).to_csv(f'results/single_site_debug/{config.data.position}/{exp_name}.csv', index=False)
    
 def main():
     parser = argparse.ArgumentParser()

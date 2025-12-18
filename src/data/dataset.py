@@ -65,6 +65,7 @@ class PulseDataset(Dataset):
                 self.include_users = self.include_users.split(',')
             if isinstance(self.exclude_users, str):
                 self.exclude_users = self.exclude_users.split(',')
+                
             print(self.include_users, self.exclude_users)
             
             if self.include_users:

@@ -2,7 +2,7 @@
 
 #SBATCH -p GPU-shared,GPU-small
 #SBATCH -N 1
-#SBATCH -t 1:30:00
+#SBATCH -t 2:00:00
 #SBATCH --cpus-per-gpu 5
 #SBATCH --gpus=v100-32:1
 

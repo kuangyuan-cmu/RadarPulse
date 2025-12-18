@@ -12,6 +12,9 @@ import os
 import json
 import pickle
 
+RESULTS_BP_PATH = 'results/bp_eval_temp/'
+RESULTS_PTT_PATH = 'results/ptt_figures_temp/'
+
 class LitModel_joint(pl.LightningModule):
     def __init__(self, config_list, training_config, checkpoint_paths=None, debug=False, enable_fusion=True):
         super().__init__()
@@ -64,12 +67,12 @@ class LitModel_joint(pl.LightningModule):
             # (0, 3, -10, 100)
             
             # tuned (except david and bill)
-            # (1, 2, -95, -35),
-            # (1, 3, -40, 10),
-            # (2, 3, 20, 85),
-            # (0, 1, 10, 60),
-            # (0, 2, -60, -7.5),
-            # (0, 3, 0, 40),
+            (1, 2, -95, -35),
+            (1, 3, -40, 10),
+            (2, 3, 20, 85),
+            (0, 1, 10, 60),
+            (0, 2, -60, -7.5),
+            (0, 3, 0, 40),
             
             # for david - not working well
             # (1, 2, -100, -30),
@@ -80,12 +83,12 @@ class LitModel_joint(pl.LightningModule):
             # (0, 3, -5, 35)
             
             # for bill
-            (1, 2, -100, -60),
-            (1, 3, -35, 20),
-            (2, 3, 45, 100),
-            (0, 1, 25, 85),
-            (0, 2, -55, 20),
-            (0, 3, 0, 100)
+            # (1, 2, -100, -60),
+            # (1, 3, -35, 20),
+            # (2, 3, 45, 100),
+            # (0, 1, 25, 85),
+            # (0, 2, -55, 20),
+            # (0, 3, 0, 100)
             
             # for sean head
             # (0, 1, 10, 110),
@@ -151,9 +154,10 @@ class LitModel_joint(pl.LightningModule):
             if self.username is None:
                 self.username = bname.split('_')[-2]
                 for i in range(len(self.ptt_queries)):
-                    os.makedirs(f'results/ptt_figures/{self.username}_{self.sites_names[self.ptt_queries[i][0]]}_{self.sites_names[self.ptt_queries[i][1]]}', exist_ok=True)
-                os.makedirs(f'results/bp_eval/', exist_ok=True)
-        
+                    os.makedirs(f'{RESULTS_PTT_PATH}{self.username}_{self.sites_names[self.ptt_queries[i][0]]}_{self.sites_names[self.ptt_queries[i][1]]}', exist_ok=True)
+                    print(f'Created folder {RESULTS_PTT_PATH}{self.username}_{self.sites_names[self.ptt_queries[i][0]]}_{self.sites_names[self.ptt_queries[i][1]]}')
+                os.makedirs(f'{RESULTS_BP_PATH}', exist_ok=True)
+                print(f'Created folder {RESULTS_BP_PATH}')
         # log loss components
         self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         for name, value in loss_components.items():
@@ -248,7 +252,7 @@ class LitModel_joint(pl.LightningModule):
                     transform=plt.gca().transAxes,
                     verticalalignment='top',
                     bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-            plt.savefig(f'results/ptt_figures/{self.username}_{self.sites_names[self.ptt_queries[i][0]]}_{self.sites_names[self.ptt_queries[i][1]]}/{bname}.png')
+            plt.savefig(f'{RESULTS_PTT_PATH}{self.username}_{self.sites_names[self.ptt_queries[i][0]]}_{self.sites_names[self.ptt_queries[i][1]]}/{bname}.png')
             plt.close()
         
         return loss
@@ -353,7 +357,7 @@ class LitModel_joint(pl.LightningModule):
         self.results['ptt_samples'] = self.ptt_samples
         self.results['ptt_queries'] = self.ptt_queries
         # Save results to file
-        results_path = f'results/ptt_figures/{self.username}_peak_detection_results.pkl'
+        results_path = f'{RESULTS_PTT_PATH}{self.username}_peak_detection_results.pkl'
         with open(results_path, 'wb') as f:
             pickle.dump(self.results, f)
         print(f'pkl file saved to {results_path}')
@@ -375,10 +379,10 @@ class LitModel_joint(pl.LightningModule):
             data['sys'] = sys
             data['dia'] = dia
             df = pd.DataFrame(data)
-            df.to_csv(f'results/bp_eval/{self.username}_ptt_bp_data.csv', index=False)
+            df.to_csv(f'{RESULTS_BP_PATH}{self.username}_ptt_bp_data.csv', index=False)
         else:
             df = pd.DataFrame(data)
-            df.to_csv(f'results/bp_eval/{self.username}_ptt_bp_data.csv', index=False)
+            df.to_csv(f'{RESULTS_BP_PATH}{self.username}_ptt_bp_data.csv', index=False)
             return
         
         
